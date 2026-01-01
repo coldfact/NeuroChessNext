@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>NeuroChess - Puzzles</title>
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #eee;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+            margin: 0;
+        }
+
+        #board {
+            width: 450px;
+            border: 2px solid #444;
+            margin: 15px 0;
+        }
+
+        /* Lichess-style Light Green Highlights */
+        .highlight-from {
+            background-color: rgba(155, 199, 0, 0.3) !important;
+        }
+
+        .highlight-to {
+            background-color: rgba(155, 199, 0, 0.5) !important;
+        }
+
+        .info-panel {
+            text-align: center;
+        }
+
+        .filter-panel {
+            margin-top: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 14px;
+        }
+
+        select {
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            padding: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        .controls {
+            margin-top: 10px;
+            display: flex;
+            gap: 10px;
+            align-items: center;
+        }
+
+        button {
+            padding: 10px 18px;
+            cursor: pointer;
+            background: #333;
+            color: white;
+            border: 1px solid #555;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        button:hover {
+            background: #444;
+        }
+
+        button:disabled {
+            opacity: 0.15;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        #nextBtn {
+            background: #2980b9;
+            border-color: #3498db;
+        }
+
+        #giveUpBtn {
+            background: #c0392b;
+            border-color: #e74c3c;
+        }
+
+        #showAgainBtn {
+            background: #27ae60;
+            border-color: #2ecc71;
+        }
+
+        .nav-label {
+            font-size: 12px;
+            color: #888;
+            margin-right: 5px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        #status {
+            margin-top: 10px;
+            font-weight: bold;
+            min-height: 24px;
+            font-size: 1.1em;
+        }
+
+        .meta-text {
+            font-size: 0.9em;
+            color: #aaa;
+            margin-top: 5px;
+        }
+
+        span.val {
+            color: #fff;
+            font-weight: bold;
+        }
+
+        /* Link styling */
+        #puzzle-link {
+            color: #3498db;
+            text-decoration: none;
+            border-bottom: 1px dashed #3498db;
+        }
+
+        #puzzle-link:hover {
+            color: #5dade2;
+            border-bottom-style: solid;
+        }
+
+        /* Blindfold Mode Styles */
+        .blindfold-hidden img[src*="chesspieces"] {
+            opacity: 0 !important;
+        }
+
+        #countdown-container {
+            margin-top: 10px;
+            background: #222;
+            padding: 8px;
+            border-radius: 4px;
+            border: 1px solid #444;
+        }
+
+        #countdown-msg {
+            color: #f1c40f;
+            font-weight: bold;
+            font-size: 0.9em;
+            text-align: center;
+            margin-bottom: 5px;
+        }
+
+        #countdown-bar {
+            width: 100%;
+            height: 6px;
+            background-color: #444;
+            border-radius: 3px;
+            overflow: hidden;
+        }
+
+        #countdown-progress {
+            width: 100%;
+            height: 100%;
+            background-color: #f1c40f;
+            /* Transition will be handled via JS/CSS class toggling or inline styles */
+        }
+
+        .invisible {
+            visibility: hidden;
+        }
+
+        /* Promotion Popup */
+        #promotion-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+        }
+
+        #promotion-popup {
+            position: absolute;
+            top: 35%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: #2c2c2c;
+            border: 2px solid #555;
+            border-radius: 8px;
+            padding: 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .promo-piece {
+            width: 60px;
+            height: 60px;
+            cursor: pointer;
+            border: 2px solid transparent;
+            border-radius: 6px;
+            transition: all 0.15s;
+        }
+
+        .promo-piece:hover {
+            border-color: #f1c40f;
+            transform: scale(1.1);
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="info-panel">
+        <h2 style="margin: 0;">Puzzle: <a id="puzzle-link" href="#" target="_blank">--</a></h2>
+        <div class="meta-text">
+            User Rating: <span id="user-rating" class="val">1200?</span> |
+            Puzzle: <span id="puzzle-rating" class="val">--</span> |
+            Band: <span id="puzzle-band" class="val">--</span>
+        </div>
+
+
+
+        <div id="status">Ready</div>
+    </div>
+
+    <div id="board"></div>
+
+    <!-- Promotion Popup -->
+    <div id="promotion-overlay">
+        <div id="promotion-popup"></div>
+    </div>
+
+    <div class="controls">
+        <button id="nextBtn">Next Puzzle →</button>
+        <button id="giveUpBtn">Give Up</button>
+        <button id="showAgainBtn" class="hidden">Show Again</button>
+
+        <div id="navGroup" class="hidden" style="display:flex; gap:10px; align-items:center;">
+            <div style="width: 2px; height: 30px; background: #444; margin: 0 10px;"></div>
+            <span class="nav-label">Moves:</span>
+            <button id="movePrev" title="Previous">
+                < </button>
+                    <button id="moveNext" title="Next"> > </button>
+        </div>
+    </div>
+
+    <!-- MOVED SETTINGS AREA -->
+    <div
+        style="margin-top: 20px; padding: 15px; background: #222; border-radius: 6px; border: 1px solid #333; width: 450px; box-sizing: border-box;">
+        <div id="countdown-container" class="invisible" style="margin-bottom: 15px; margin-top: 0;">
+            <div id="countdown-msg">Memorize Position!</div>
+            <div id="countdown-bar">
+                <div id="countdown-progress"></div>
+            </div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <div class="filter-panel" style="margin: 0;">
+                <select id="bandSelect" style="padding: 6px;">
+                    <option value="All">Band: All Ratings</option>
+                    <option value="0000-0800">0 - 800</option>
+                    <option value="0800-1000">800 - 1000</option>
+                    <option value="1000-1200">1000 - 1200</option>
+                    <option value="1200-1450">1200 - 1450</option>
+                    <option value="1450-1800">1450 - 1800</option>
+                    <option value="1800-2200">1800 - 2200</option>
+                    <option value="2200-PLUS">2200+</option>
+                </select>
+            </div>
+
+            <div>
+                <label
+                    style="color: #bbb; font-size: 0.9em; cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="blindfoldToggle">
+                    <span>Blindfold</span>
+                    <input type="number" id="blindfoldTime" value="10"
+                        style="width: 45px; background: #333; border: 1px solid #555; color: white; padding: 4px; text-align: center; border-radius: 3px;">
+                    <span style="font-size: 0.8em;">s</span>
+                </label>
+            </div>
+        </div>
+    </div>
+
+    <div style="margin-top: 25px;">
+        <a href="#" id="resetLink"
+            style="color: #666; font-size: 13px; text-decoration: none; border-bottom: 1px dotted #666;">Reset Progress
+            & Ratings</a>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.5.1.min.js"></script>
+    <script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+
+    <script>
+        let board = null;
+        let isBlindfoldMode = false;
+        let blindfoldActive = false;
+        let blindfoldInteractionLocked = false;
+        let countdownInterval = null;
+        let solutionMoves = [];
+        let currentDisplayIndex = -1;
+        let initialFEN = '';
+        let puzzleQueue = [];
+        let ratingProcessed = false;
+        let isInitializing = false;
+        const BATCH_SIZE = 3;
+
+        // --- SOUND MANAGER ---
+        const soundManager = {
+            sounds: {
+                move: new Audio('/static/sounds/Move.mp3'),
+                capture: new Audio('/static/sounds/Capture.mp3'),
+                notify: new Audio('/static/sounds/GenericNotify.mp3')
+            },
+            unlocked: false,
+            init() {
+                // Preload all sounds
+                Object.values(this.sounds).forEach(a => a.load());
+
+                // Unlock audio on first user interaction
+                const unlock = () => {
+                    if (this.unlocked) return;
+                    Object.values(this.sounds).forEach(a => {
+                        a.play().then(() => a.pause()).catch(() => { });
+                        a.currentTime = 0;
+                    });
+                    this.unlocked = true;
+                    document.removeEventListener('click', unlock);
+                    document.removeEventListener('keydown', unlock);
+                };
+                document.addEventListener('click', unlock);
+                document.addEventListener('keydown', unlock);
+            },
+            play(moveObj) {
+                if (!moveObj) return;
+                let audio;
+                if (moveObj.captured) {
+                    audio = this.sounds.capture;
+                } else {
+                    audio = this.sounds.move;
+                }
+                audio.currentTime = 0;
+                audio.play().catch(e => console.log('Audio blocked:', e));
+            },
+            playNotify() {
+                this.sounds.notify.currentTime = 0;
+                this.sounds.notify.play().catch(e => console.log('Audio blocked:', e));
+            }
+        };
+        soundManager.init();
+
+        // --- DATA BUFFERING ---
+        function replenishQueue(force = false) {
+            if (force) puzzleQueue = [];
+            if (puzzleQueue.length <= 2) {
+                const band = $('#bandSelect').val();
+                const mode = $('#blindfoldToggle').is(':checked') ? 'blindfold' : 'standard';
+
+                const reqStart = new Date().getTime();
+                console.log(`[${new Date().toISOString()}] Fetching puzzles... Band: ${band}, Mode: ${mode}`);
+
+                $.getJSON(`/get_puzzles?count=${BATCH_SIZE}&band=${band}&mode=${mode}`, function (data) {
+                    const duration = new Date().getTime() - reqStart;
+                    console.log(`[${new Date().toISOString()}] Puzzles received after ${duration}ms:`, data);
+
+                    if (data.user_rating) {
+                        $('#user-rating').text(Math.round(data.user_rating));
+                        if (Array.isArray(data.puzzles)) {
+                            puzzleQueue = [...puzzleQueue, ...data.puzzles];
+                            console.log(`[${new Date().toISOString()}] Queue size now: ${puzzleQueue.length}`);
+                        } else {
+                            console.error("data.puzzles is not an array!", data.puzzles);
+                        }
+                    } else {
+                        // Fallback handling
+                        if (Array.isArray(data)) {
+                            puzzleQueue = [...puzzleQueue, ...data];
+                        } else {
+                            console.error("Old format data is not array!", data);
+                        }
+                    }
+
+                    if (currentDisplayIndex === -1 && puzzleQueue.length >= 1 && !isInitializing) {
+                        console.log(`[${new Date().toISOString()}] Triggering initNextPuzzle from replenish`);
+                        initNextPuzzle();
+                    }
+                }).fail(function (jqXHR, textStatus, errorThrown) {
+                    const duration = new Date().getTime() - reqStart;
+                    console.error(`[${new Date().toISOString()}] Fetch failed after ${duration}ms:`, textStatus, errorThrown);
+                    alert("Error fetching puzzles: " + errorThrown);
+                });
+            }
+        }
+
+        // --- VISUAL FEEDBACK (HIGHLIGHTING) ---
+        function removeHighlights() {
+            $('#board .square-55d63').removeClass('highlight-from highlight-to');
+        }
+
+        function applyHighlights(move) {
+            // setTimeout(0) pushes this to the end of the event loop
+            // Ensuring it runs AFTER Chessboard.js finishes its internal redrawing.
+            setTimeout(() => {
+                removeHighlights();
+                if (move) {
+                    $(`.square-${move.from}`).addClass('highlight-from');
+                    $(`.square-${move.to}`).addClass('highlight-to');
+                }
+            }, 0);
+        }
+
+        // --- RENDERING ENGINE ---
+        function updateDisplay() {
+            let tempGame = new Chess(initialFEN);
+            let lastMove = null;
+
+            for (let i = 0; i <= currentDisplayIndex; i++) {
+                lastMove = tempGame.move(solutionMoves[i], { sloppy: true });
+            }
+
+            board.position(tempGame.fen());
+            applyHighlights(lastMove);
+            soundManager.play(lastMove); // Play sound
+
+            if (blindfoldActive) {
+                $('#board').addClass('blindfold-hidden');
+            } else {
+                $('#board').removeClass('blindfold-hidden');
+            }
+
+            $('#movePrev').prop('disabled', currentDisplayIndex <= -1);
+            $('#moveNext').prop('disabled', currentDisplayIndex >= solutionMoves.length - 1);
+        }
+
+        function onDragStart(source, piece, position, orientation) {
+            if (blindfoldInteractionLocked) return false;
+            if (blindfoldActive) return true; // Allow dragging invisible pieces
+        }
+
+        // --- BLINDFOLD LOGIC ---
+        function startBlindfoldCountdown() {
+            if (countdownInterval) clearInterval(countdownInterval);
+
+            // Get user time (default 5 if invalid)
+            let timeLeft = parseInt($('#blindfoldTime').val()) || 5;
+
+            blindfoldInteractionLocked = true;
+            $('#countdown-container').removeClass('invisible');
+
+            // Reset Bar
+            $('#countdown-progress').css({ width: '100%', transition: 'none' });
+            $('#countdown-progress').offset(); // Force reflow
+
+            // Start Animation
+            $('#countdown-progress').css({ width: '0%', transition: `width ${timeLeft}s linear` });
+
+            // Update Text Immediately
+            $('#countdown-msg').text(`Memorize Position! (${timeLeft})`);
+
+            countdownInterval = setInterval(() => {
+                timeLeft--;
+                if (timeLeft > 0) {
+                    $('#countdown-msg').text(`Memorize Position! (${timeLeft})`);
+                } else {
+                    clearInterval(countdownInterval);
+                    countdownInterval = null;
+
+                    blindfoldInteractionLocked = false;
+                    blindfoldActive = true;
+                    $('#countdown-container').addClass('invisible');
+                    updateDisplay();
+                    $('#status').text('Your move... (Blindfold)').css('color', '#f39c12');
+                }
+            }, 1000);
+        }
+
+
+        // --- GAME LOGIC ---
+        function submitRating(success) {
+            if (ratingProcessed) return;
+            ratingProcessed = true;
+
+            const puzzleId = $('#puzzle-link').text();
+            const pR = parseInt($('#puzzle-rating').text()) || 1500;
+            const mode = isBlindfoldMode ? 'blindfold' : 'standard';
+
+            if (puzzleId && puzzleId !== '--') {
+                $.ajax({
+                    url: '/record_attempt',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({
+                        PuzzleId: puzzleId,
+                        success: success,
+                        puzzleRating: pR,
+                        mode: mode
+                    }),
+                    success: function (resp) {
+                        console.log("Attempt recorded: " + (success ? "Win" : "Loss"));
+                        if (resp.new_rating) {
+                            $('#user-rating').text(resp.new_rating);
+                        }
+                    }
+                });
+            }
+        }
+
+        // --- PROMOTION POPUP ---
+        let pendingPromotion = null; // {source, target, expectedMove}
+
+        function showPromotionPopup(source, target, color) {
+            const pieces = ['q', 'r', 'n', 'b'];
+            const popup = $('#promotion-popup');
+            popup.empty();
+
+            pieces.forEach(p => {
+                const pieceCode = color + p.toUpperCase(); // e.g., 'wQ' or 'bQ'
+                const img = $('<img>')
+                    .addClass('promo-piece')
+                    .attr('src', `https://chessboardjs.com/img/chesspieces/wikipedia/${pieceCode}.png`)
+                    .attr('data-piece', p)
+                    .on('click', function () {
+                        handlePromotionChoice($(this).data('piece'));
+                    });
+                popup.append(img);
+            });
+
+            $('#promotion-overlay').css('display', 'flex');
+        }
+
+        function handlePromotionChoice(piece) {
+            $('#promotion-overlay').hide();
+
+            if (!pendingPromotion) return;
+            const { source, target, expectedMove } = pendingPromotion;
+            const moveAttempt = source + target + piece;
+
+            if (moveAttempt === expectedMove) {
+                $('#status').text('CORRECT!').css('color', '#2ecc71');
+                currentDisplayIndex++;
+                updateDisplay();
+
+                if (currentDisplayIndex < solutionMoves.length - 1) {
+                    setTimeout(playOpponent, 600);
+                } else {
+                    finishPuzzle('Solved!');
+                }
+            } else {
+                $('#status').text('WRONG!').css('color', '#e74c3c');
+                soundManager.playNotify();
+                submitRating(false);
+                board.position(getCurrentFEN()); // Snapback
+            }
+            pendingPromotion = null;
+        }
+
+        function getCurrentFEN() {
+            let tempGame = new Chess(initialFEN);
+            for (let i = 0; i <= currentDisplayIndex; i++) {
+                tempGame.move(solutionMoves[i], { sloppy: true });
+            }
+            return tempGame.fen();
+        }
+
+        function onDrop(source, target) {
+            if (source === target) return;
+
+            let expectedIndex = currentDisplayIndex + 1;
+            const expectedMove = solutionMoves[expectedIndex];
+
+            // Detect if this is a promotion move (expected move is 5 chars)
+            if (expectedMove && expectedMove.length === 5 && source + target === expectedMove.slice(0, 4)) {
+                // It's a promotion! Show popup
+                const tempGame = new Chess(getCurrentFEN());
+                const color = tempGame.turn(); // 'w' or 'b'
+                pendingPromotion = { source, target, expectedMove };
+                showPromotionPopup(source, target, color);
+                return 'snapback'; // Prevent immediate drop
+            }
+
+            // Normal move check
+            let moveAttempt = source + target;
+            if (moveAttempt === expectedMove) {
+                $('#status').text('CORRECT!').css('color', '#2ecc71');
+                currentDisplayIndex = expectedIndex;
+                updateDisplay();
+
+                if (currentDisplayIndex < solutionMoves.length - 1) {
+                    setTimeout(playOpponent, 600);
+                } else {
+                    finishPuzzle('Solved!');
+                }
+            } else {
+                $('#status').text('WRONG!').css('color', '#e74c3c');
+                soundManager.playNotify(); // Wrong move sound
+                submitRating(false); // Immediate Fail
+                return 'snapback';
+            }
+        }
+
+        function playOpponent() {
+            if (currentDisplayIndex < solutionMoves.length - 1) {
+                currentDisplayIndex++;
+                updateDisplay();
+
+                // Check for Blindfold Trigger (First move only)
+                if (isBlindfoldMode && currentDisplayIndex === 0) {
+                    startBlindfoldCountdown();
+                    $('#status').text('Look at the board...').css('color', '#3498db');
+                    return;
+                }
+
+                if (currentDisplayIndex === solutionMoves.length - 1) {
+                    finishPuzzle('Solved!');
+                } else {
+                    let msg = blindfoldActive ? 'Your move... (Blindfold)' : 'Your move...';
+                    let col = blindfoldActive ? '#f39c12' : '#eee';
+                    $('#status').text(msg).css('color', col);
+                }
+            }
+        }
+
+        function finishPuzzle(msg, color = '#f1c40f') {
+            $('#navGroup').removeClass('hidden');
+            $('#giveUpBtn').addClass('hidden');
+            $('#showAgainBtn').addClass('hidden');
+            $('#status').text(msg).css('color', color);
+
+            // Reveal everything
+            blindfoldActive = false;
+            blindfoldInteractionLocked = false;
+            updateDisplay();
+
+            // Record Result
+            const success = (msg === 'Solved!');
+            submitRating(success);
+        }
+
+        function initNextPuzzle() {
+            if (puzzleQueue.length === 0) return;
+            if (isInitializing) return;
+            isInitializing = true;
+
+            const data = puzzleQueue.shift();
+            replenishQueue(); // Prefetch more in background
+
+            solutionMoves = data.Moves;
+            initialFEN = data.FEN;
+            currentDisplayIndex = -1;
+
+            // UI Updates
+            $('#puzzle-link').text(data.PuzzleId).attr('href', `https://lichess.org/training/${data.PuzzleId}`);
+            $('#puzzle-rating').text(data.Rating);
+            $('#puzzle-band').text(data.Band);
+            $('#status').text('Ready').css('color', '#eee');
+            $('#navGroup').addClass('hidden');
+            $('#giveUpBtn').removeClass('hidden');
+            $('#giveUpBtn').removeClass('hidden');
+            if (isBlindfoldMode) $('#showAgainBtn').removeClass('hidden');
+            else $('#showAgainBtn').addClass('hidden');
+
+            // Re-enable toggle
+            $('#blindfoldToggle').prop('disabled', false);
+
+            // Reset state
+            isBlindfoldMode = $('#blindfoldToggle').is(':checked');
+            blindfoldActive = false;
+            blindfoldInteractionLocked = false;
+            ratingProcessed = false;
+
+            const gameTemp = new Chess(initialFEN);
+            const userSide = gameTemp.turn() === 'w' ? 'black' : 'white';
+
+            board = Chessboard('board', {
+                draggable: true,
+                position: initialFEN,
+                orientation: userSide,
+                onDrop: onDrop,
+                onDragStart: onDragStart,
+                pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+            });
+
+            updateDisplay();
+            setTimeout(() => {
+                playOpponent();
+                isInitializing = false;
+            }, 800); // Trigger the "pre-move"
+        }
+
+        function reloadCurrentPuzzle() {
+            // Stop any running stuff
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+
+            $('#countdown-container').addClass('invisible');
+
+            // Refresh Settings
+            isBlindfoldMode = $('#blindfoldToggle').is(':checked');
+            blindfoldActive = false;
+            blindfoldInteractionLocked = false;
+
+            // Reset Board State
+            currentDisplayIndex = -1;
+            $('#navGroup').addClass('hidden');
+            $('#giveUpBtn').removeClass('hidden');
+            if (isBlindfoldMode) $('#showAgainBtn').removeClass('hidden');
+            else $('#showAgainBtn').addClass('hidden');
+            $('#status').text('Ready').css('color', '#eee');
+
+            // Re-init board (sometimes needed if orientation changed or to be safe)
+            // But usually just resetting position is enough if orientation is same.
+            // Let's do partial reset:
+            board.position(initialFEN, false);
+            updateDisplay();
+
+            // Replay start sequence
+            setTimeout(playOpponent, 500);
+        }
+
+        function switchGameMode() {
+            $('#blindfoldToggle').prop('disabled', true); // Lock toggle logic
+
+            // Stop any running stuff
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+                countdownInterval = null;
+            }
+
+            $('#countdown-container').addClass('invisible');
+
+            // Refresh Settings
+            isBlindfoldMode = $('#blindfoldToggle').is(':checked');
+            blindfoldActive = false;
+            blindfoldInteractionLocked = false;
+            ratingProcessed = false;
+
+            // Reset Board State variables so replenishQueue knows to start
+            currentDisplayIndex = -1;
+
+            // Clear UI immediately
+            $('#status').text('Switching Mode...').css('color', '#aaa');
+            $('#navGroup').addClass('hidden');
+            $('#giveUpBtn').addClass('hidden');
+            $('#showAgainBtn').addClass('hidden');
+
+            if (board) board.clear();
+
+
+            // Force fetch new puzzles for the new mode
+            console.log(`[${new Date().toISOString()}] Switching mode -> calling replenishQueue(true)`);
+            replenishQueue(true);
+        }
+
+        function resetProgress() {
+            if (confirm("Are you sure? This will WIPE ALL history and reset your ratings to 1200.")) {
+                $.post('/reset_progress', function () {
+                    alert('Progress Reset.');
+                    location.reload();
+                }).fail(function () {
+                    alert('Reset failed.');
+                });
+            }
+        }
+
+        // --- EVENT HANDLERS ---
+        $('#bandSelect').on('change', switchGameMode);
+        $('#nextBtn').on('click', initNextPuzzle);
+        $('#giveUpBtn').on('click', () => finishPuzzle('Revealed.', '#aaa'));
+        $('#showAgainBtn').on('click', reloadCurrentPuzzle);
+        $('#resetLink').on('click', (e) => { e.preventDefault(); resetProgress(); });
+
+        $('#blindfoldToggle').on('change', switchGameMode);
+        $('#blindfoldTime').on('change', reloadCurrentPuzzle);
+
+        $('#movePrev').on('click', () => {
+            if (currentDisplayIndex > -1) {
+                currentDisplayIndex--;
+                updateDisplay();
+            }
+        });
+
+        $('#moveNext').on('click', () => {
+            if (currentDisplayIndex < solutionMoves.length - 1) {
+                currentDisplayIndex++;
+                updateDisplay();
+            }
+        });
+
+        $(document).ready(function () {
+            // Check for URL parameters
+            const urlParams = new URLSearchParams(window.location.search);
+            const puzzleId = urlParams.get('puzzle');
+            const mode = urlParams.get('mode');
+
+            // Set blindfold mode if specified
+            if (mode === 'blind' || mode === 'blindfold') {
+                $('#blindfoldToggle').prop('checked', true);
+                isBlindfoldMode = true;
+            }
+
+            if (puzzleId) {
+                // Load specific puzzle first
+                $.getJSON(`/get_puzzle/${puzzleId}`, function (data) {
+                    if (data.error) {
+                        alert(`Puzzle not found: ${puzzleId}`);
+                        replenishQueue();
+                    } else {
+                        puzzleQueue.unshift(data); // Add to front of queue
+                        initNextPuzzle();
+                        replenishQueue(); // Prefetch more
+                    }
+                }).fail(function () {
+                    alert(`Failed to load puzzle: ${puzzleId}`);
+                    replenishQueue();
+                });
+            } else {
+                replenishQueue();
+            }
+        });
+    </script>
+</body>
+
+</html>

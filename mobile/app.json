@@ -1,0 +1,37 @@
+{
+  "expo": {
+    "name": "NeuroChess",
+    "slug": "neurochess",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#1a1a1a"
+    },
+    "ios": {
+      "bundleIdentifier": "com.metameda.neurochess",
+      "supportsTablet": true
+    },
+    "android": {
+      "package": "com.metameda.neurochess",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#1a1a1a"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-sqlite",
+        {
+          "enableChangeListener": true
+        }
+      ],
+      "expo-asset"
+    ],
+    "scheme": "neurochess"
+  }
+}

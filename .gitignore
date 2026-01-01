@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+venv/
+.venv/
+env/
+
+# Database / Large Data
+*.sqlite
+*.db
+*.pgn
+games/
+ChessEngines/
+maia2_models/
+user_data.db
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Mobile / Node
+node_modules/
+.expo/
+dist/
+web-build/
+coverage/
+.npm/
+*.log
+
+# Keys / Secrets
+.env
+*.pem
+*.key
+
+# Build Artifacts
+android/
+ios/
