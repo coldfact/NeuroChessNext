@@ -21,7 +21,8 @@ interface GameState {
     isFavorite?: boolean;
 }
 
-export function useChessGame(band: string = 'All', autoAdvance: boolean = false) {
+// Note: We now control puzzle loading from the component via nextPuzzle, but we keep the logic here.
+export function useChessGame(initialBand: string, initialTheme: string, autoAdvance: boolean) {
     const [game] = useState(() => new Chess());
     const [solutionMoves, setSolutionMoves] = useState<string[]>([]);
     const [moveIndex, setMoveIndex] = useState(-1);
@@ -45,7 +46,8 @@ export function useChessGame(band: string = 'All', autoAdvance: boolean = false)
     const userRatingRef = React.useRef(1200);
     const loadingRef = useRef(false);
     const puzzleFenRef = useRef(''); // Store initial puzzle FEN for reset
-    const bandRef = useRef(band); // Track current band to avoid stale closure
+    const bandRef = useRef(initialBand); // Track current band to avoid stale closure
+    const themeRef = useRef(initialTheme);
     const modeRef = useRef<'standard' | 'blindfold'>('standard');
     const isMounted = useRef(true); // To prevent state updates on unmounted component
 
@@ -61,9 +63,10 @@ export function useChessGame(band: string = 'All', autoAdvance: boolean = false)
         modeRef.current = state.mode;
     }, [state.userRating, state.mode, state.stats]);
 
-    useEffect(() => {
-        bandRef.current = band;
-    }, [band]);
+    // Sync refs immediately during render to avoid stale closures in callbacks
+    // avoiding the need for setTimeout in parent components
+    bandRef.current = initialBand;
+    themeRef.current = initialTheme;
 
     // Set isMounted to false on unmount
     useEffect(() => {
@@ -122,8 +125,21 @@ export function useChessGame(band: string = 'All', autoAdvance: boolean = false)
         }));
 
         try {
-            // Note: bandRef.current ensures we use the LATEST selected band
-            const puzzle = await DatabaseService.getRandomPuzzle(userRatingRef.current, bandRef.current);
+            // Get Rating based on Mode
+            const getRatingForMode = (mode: 'standard' | 'blindfold', band: string) => {
+                const stats = state.stats[mode];
+                if (stats) {
+                    return Math.round(stats.rating);
+                }
+                return 1200; // Default if no stats
+            };
+            const userRating = getRatingForMode(modeRef.current, bandRef.current);
+            const currentTheme = themeRef.current;
+
+            console.log(`[loadPuzzle] Mode=${modeRef.current}, Band=${bandRef.current}, Theme=${currentTheme}, Rating=${userRating}`);
+
+            // Fetch new puzzle
+            const puzzle = await DatabaseService.getRandomPuzzle(userRating, bandRef.current, currentTheme);
 
             if (!puzzle) {
                 if (!isMounted.current) return;
@@ -592,6 +608,25 @@ export function useChessGame(band: string = 'All', autoAdvance: boolean = false)
         setState(prev => ({ ...prev, isFavorite: newStatus }));
     }, [state.puzzleId]);
 
+    const toggleBlindfold = useCallback(() => {
+        setState(prev => {
+            const newMode = prev.mode === 'standard' ? 'blindfold' : 'standard';
+            // Set isLoading to true immediately to prevent UI flicker (e.g. Peek button showing briefly)
+            // The useEffect in the consumer will trigger the actual data load
+            return {
+                ...prev,
+                mode: newMode,
+                isLoading: true,
+                status: { message: 'Switching mode...', color: '#888' }
+            };
+        });
+    }, []);
+
+    // Helper to properly set mode with side effects if needed
+    const setGameMode = useCallback((mode: 'standard' | 'blindfold') => {
+        setMode(mode);
+    }, [setMode]);
+
     return {
         ...state,
         setMode,
@@ -602,6 +637,7 @@ export function useChessGame(band: string = 'All', autoAdvance: boolean = false)
         navigateHistory,
         restartPuzzle, // Expose new function
         toggleFavorite,
+        toggleBlindfold, // Added back
         canGoBack: moveIndex > -1,
         canGoForward: moveIndex < solutionMoves.length - 1
     };

@@ -1,9 +1,11 @@
 import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { Settings, Eye, EyeOff, BarChart2, Clock } from 'lucide-react-native';
+import { Settings, Eye, EyeOff, BarChart2, Clock, Layers } from 'lucide-react-native';
 
 interface BottomToolbarProps {
     band: string;
     onOpenBandSelector: () => void;
+    theme: string;
+    onOpenThemeSelector: () => void;
     blindfold: boolean;
     onToggleBlindfold: () => void;
     onOpenSettings: () => void;
@@ -11,6 +13,7 @@ interface BottomToolbarProps {
 
 export default function BottomToolbar({
     band, onOpenBandSelector,
+    theme, onOpenThemeSelector,
     blindfold, onToggleBlindfold,
     onOpenSettings
 }: BottomToolbarProps) {
@@ -19,7 +22,15 @@ export default function BottomToolbar({
             {/* Band Selector */}
             <Pressable style={styles.toolItem} onPress={onOpenBandSelector}>
                 <BarChart2 color="#888" size={20} />
-                <Text style={styles.toolText}>{band === 'All' ? 'All Ratings' : band}</Text>
+                <Text style={styles.toolText}>{band === 'All' ? 'Rating' : band}</Text>
+            </Pressable>
+
+            {/* Theme Selector */}
+            <Pressable style={styles.toolItem} onPress={onOpenThemeSelector}>
+                <Layers color={theme === 'all' ? '#888' : '#4ECDC4'} size={20} />
+                <Text style={[styles.toolText, theme !== 'all' && styles.activeTextTheme]}>
+                    {theme === 'all' ? 'Themes' : theme.charAt(0).toUpperCase() + theme.slice(1)}
+                </Text>
             </Pressable>
 
             {/* Blindfold Toggle */}
@@ -70,6 +81,10 @@ const styles = StyleSheet.create({
     },
     activeText: {
         color: '#e74c3c',
+        fontWeight: 'bold',
+    },
+    activeTextTheme: {
+        color: '#4ECDC4',
         fontWeight: 'bold',
     }
 });

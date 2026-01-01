@@ -106,6 +106,7 @@ def get_puzzles():
     # 1. Parse Request Parameters
     count = request.args.get('count', default=10, type=int)
     band = request.args.get('band', default=None, type=str)
+    theme = request.args.get('theme', default=None, type=str)
     # ACCEPT CLIENT RATING: If provided, use this instead of looking up in DB
     client_rating = request.args.get('rating', default=None, type=int)
     
@@ -168,6 +169,18 @@ def get_puzzles():
                       max_r = user_rating + 150
                       puzzle_query += ' AND p.Rating BETWEEN ? AND ?'
                       params.extend([min_r, max_r])
+                 
+                 # Theme Logic
+                 if theme and theme != "all":
+                     # Validate theme to prevent SQL injection (whitelist approach)
+                     valid_themes = {
+                         "opening", "middlegame", "endgame", 
+                         "attraction", "defensiveMove", "deflection", 
+                         "discoveredAttack", "hangingPiece", "intermezzo", 
+                         "quietMove", "sacrifice", "skewer"
+                     }
+                     if theme in valid_themes:
+                         puzzle_query += f' AND p.has_{theme} = 1'
                  
                  # Random Seek Logic (Only for non-favorites)
                  puzzle_query += ' AND p.PuzzleId >= ? ORDER BY p.PuzzleId LIMIT ?'

@@ -11,11 +11,14 @@ import SettingsModal from '../src/components/SettingsModal';
 import BandSelectorModal from '../src/components/BandSelectorModal';
 import { useChessGame } from '../src/hooks/useChessGame';
 import { BoardTheme, BOARD_THEMES, PieceSet, PIECE_SETS } from '../src/constants';
+import ThemeSelectorModal, { Theme } from '../src/components/ThemeSelectorModal';
+import { Target } from 'lucide-react-native';
 
 export default function GameScreen() {
     const [band, setBand] = useState('All');
+    const [theme, setTheme] = useState('all');
     const [autoAdvance, setAutoAdvance] = useState(false);
-    const game = useChessGame(band, autoAdvance);
+    const game = useChessGame(band, theme, autoAdvance);
 
     const [pieceSet, setPieceSet] = useState<PieceSet>('cburnett');
     const [boardTheme, setBoardTheme] = useState<BoardTheme>(BOARD_THEMES[0]);
@@ -25,6 +28,7 @@ export default function GameScreen() {
     const [piecesHidden, setPiecesHidden] = useState(false); // actual piece visibility
     const [settingsVisible, setSettingsVisible] = useState(false);
     const [bandSelectorVisible, setBandSelectorVisible] = useState(false);
+    const [themeSelectorVisible, setThemeSelectorVisible] = useState(false);
 
     // Load Settings
     useEffect(() => {
@@ -46,6 +50,9 @@ export default function GameScreen() {
 
                 const storedBand = await AsyncStorage.getItem('band');
                 if (storedBand) setBand(storedBand);
+
+                const storedTheme = await AsyncStorage.getItem('theme');
+                if (storedTheme) setTheme(storedTheme);
 
                 const storedAutoAdvance = await AsyncStorage.getItem('autoAdvance');
                 if (storedAutoAdvance === 'true') setAutoAdvance(true);
@@ -84,9 +91,15 @@ export default function GameScreen() {
     useEffect(() => {
         if (game.puzzleId) {
             setPiecesHidden(false);
-            setBlindfoldCountdown(0);
+            // Verify if we should start blindfold immediately
+            // This prevents the "0" state flicker for the Peek button
+            if (game.mode === 'blindfold') {
+                setBlindfoldCountdown(blindfoldTime);
+            } else {
+                setBlindfoldCountdown(0);
+            }
         }
-    }, [game.puzzleId]);
+    }, [game.puzzleId, game.mode, blindfoldTime]);
 
     // Blindfold Countdown Logic
     useEffect(() => {
@@ -103,12 +116,18 @@ export default function GameScreen() {
         }
     }, [blindfoldCountdown]);
 
-    // Start countdown when blindfold mode and puzzle ready (Your move...)
+    // Start countdown when blindfold mode and puzzle ready (Your move...) 
+    // AND NOT LOADING (Fixes flicker when switching puzzles)
+    // This is now primarily for RETRY or if the first effect missed it (redundancy)
     useEffect(() => {
-        if (game.mode === 'blindfold' && game.status.message === 'Your move...' && !piecesHidden && blindfoldCountdown === 0) {
+        if (!game.isLoading && game.mode === 'blindfold' && game.status.message === 'Your move...' && !piecesHidden && blindfoldCountdown === 0) {
+            // Only trigger if we are "resting" at 0. 
+            // If the puzzle just loaded, the previous effect sets it to 5, so this won't run.
+            // This allows for "Restart" logic if we manually set countdown to 0.
             setBlindfoldCountdown(blindfoldTime);
         }
-    }, [game.mode, game.status.message, piecesHidden, blindfoldTime]);
+    }, [game.mode, game.status.message, piecesHidden, blindfoldTime, game.isLoading]);
+
 
     // Reveal pieces when puzzle is solved or given up
     useEffect(() => {
@@ -122,14 +141,26 @@ export default function GameScreen() {
     const handleBandChange = (newBand: string) => {
         setBand(newBand);
         AsyncStorage.setItem('band', newBand);
+        setBandSelectorVisible(false);
     };
 
-    // Load puzzle when band changes or on mount
+    const handleThemeChange = (newTheme: string) => {
+        setTheme(newTheme);
+        AsyncStorage.setItem('theme', newTheme);
+        setThemeSelectorVisible(false);
+    };
+
+    // Reactively load puzzle when Band OR Theme OR Mode changes
+    // This removes the need for explicit nextPuzzle calls in handlers
     useEffect(() => {
-        console.log(`[Effect: Band Change] Band=${band} -> Loading Puzzle`);
-        // Use timeout to allow ref updates to propagate if any
-        setTimeout(() => game.nextPuzzle(), 0);
-    }, [band]);
+        console.log(`[Effect: Config Change] Band=${band}, Theme=${theme}, Mode=${game.mode} -> Loading Puzzle`);
+        // Reset local UI state immediately to stop timers/anims
+        setBlindfoldCountdown(0);
+        setPiecesHidden(false);
+
+        // Call synchronously now that refs update immediately in render
+        game.nextPuzzle();
+    }, [band, theme, game.mode]);
 
     const isFinished = game.status.message === 'Solved!' || game.status.message === 'Solution Revealed';
 
@@ -262,18 +293,25 @@ export default function GameScreen() {
             <BottomToolbar
                 band={band}
                 onOpenBandSelector={() => setBandSelectorVisible(true)}
+                theme={theme}
+                onOpenThemeSelector={() => setThemeSelectorVisible(true)}
                 blindfold={game.mode === 'blindfold'}
                 onToggleBlindfold={() => {
-                    const newMode = game.mode === 'standard' ? 'blindfold' : 'standard';
-                    game.setMode(newMode);
-                    AsyncStorage.setItem('blindfoldMode', newMode);
+                    game.toggleBlindfold();
+                    // Determine next mode logic - simple toggle
+                    const nextMode = game.mode === 'standard' ? 'blindfold' : 'standard';
+                    AsyncStorage.setItem('blindfoldMode', nextMode);
 
-                    // Reset UI State
-                    setPiecesHidden(false);
-                    setBlindfoldCountdown(0);
-
-                    // Sync call to avoid stale state 'Start' logic
-                    game.nextPuzzle();
+                    // Reset UI state for blindfold toggle
+                    if (nextMode === 'standard') {
+                        setPiecesHidden(false);
+                        setBlindfoldCountdown(0);
+                    } else {
+                        // If checking switch TO blindfold, restart timer logic?
+                        // Usually applies on next puzzle. 
+                        // But if current puzzle is active, maybe trigger countdown?
+                        // For now, let it apply on next puzzle naturally or if user forces restart.
+                    }
                 }}
                 onOpenSettings={() => setSettingsVisible(true)}
             />
@@ -300,6 +338,13 @@ export default function GameScreen() {
                 currentBand={band}
                 onSelectBand={handleBandChange}
             />
+
+            <ThemeSelectorModal
+                visible={themeSelectorVisible}
+                onClose={() => setThemeSelectorVisible(false)}
+                currentTheme={theme}
+                onSelectTheme={handleThemeChange}
+            />
         </SafeAreaView >
     );
 }
@@ -316,9 +361,8 @@ const styles = StyleSheet.create({
     header: {
         flexDirection: 'row',
         padding: 20,
-        paddingHorizontal: 0,
         alignItems: 'center',
-        gap: 15,
+        justifyContent: 'space-between', // Push items to edges
         width: 350, // Match board width
     },
     ratingBadge: {
@@ -334,13 +378,9 @@ const styles = StyleSheet.create({
         fontSize: 18,
         fontWeight: 'bold',
     },
-    rdText: {
-        fontSize: 12,
-        color: '#888',
-        fontWeight: 'normal',
-    },
     puzzleInfo: {
         flex: 1,
+        marginLeft: 15, // Add spacing between badge and text
     },
     puzzleText: {
         color: '#888',

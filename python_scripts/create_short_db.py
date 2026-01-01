@@ -3,8 +3,11 @@ import os
 import argparse
 
 # Paths
-SOURCE_DB = r"A:\applications\torok\lichess_db_puzzles.sqlite"
-DEST_DB = r"A:\applications\torok\lichess_short_puzzles.sqlite"
+# Note: Assuming script is run from python_scripts/, so DB is in parent root
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+SOURCE_DB = os.path.join(BASE_DIR, "lichess_db_puzzles.sqlite")
+DEST_DB = os.path.join(BASE_DIR, "lichess_short_puzzles.sqlite")
+
 MAX_PLY = 4
 BATCH_SIZE = 10000
 
@@ -19,6 +22,22 @@ BANDS = [
     ("2200-PLUS", 2200, 10000), # 10k as safe upper bound
 ]
 
+# Themes to extract into Boolean columns (Order matters for UI, but here just list them)
+THEMES_TO_INDEX = [
+    "opening",
+    "middlegame",
+    "endgame",
+    "attraction",
+    "defensiveMove",
+    "deflection",
+    "discoveredAttack",
+    "hangingPiece",
+    "intermezzo",
+    "quietMove",
+    "sacrifice",
+    "skewer"
+]
+
 def get_band_label(rating):
     """Determines the band label for a given rating."""
     for label, low, high in BANDS:
@@ -29,7 +48,7 @@ def get_band_label(rating):
 def get_stats():
     """Calculates stats using the pre-computed rating_band column."""
     if not os.path.exists(DEST_DB):
-        print(f"Error: Subset database not found.")
+        print(f"Error: Subset database not found at {DEST_DB}")
         return
 
     query = """
@@ -50,9 +69,20 @@ def get_stats():
     for band, count in results:
         print(f"{str(band):<15} | {count:<10,}")
 
+    print("\nTheme Stats (True Count):")
+    print("-" * 30)
+    for theme in THEMES_TO_INDEX:
+        col_name = f"has_{theme}"
+        cursor.execute(f"SELECT COUNT(*) FROM puzzles WHERE {col_name} = 1")
+        count = cursor.fetchone()[0]
+        print(f"{theme:<20} | {count:<10,}")
+
 def create_short_puzzles_db():
+    print(f"Source DB: {SOURCE_DB}")
+    print(f"Dest DB:   {DEST_DB}")
+
     if not os.path.exists(SOURCE_DB):
-        print(f"Source database not found at {SOURCE_DB}")
+        print(f"Error: Source database not found at {SOURCE_DB}")
         return
 
     src_conn = sqlite3.connect(SOURCE_DB)
@@ -62,35 +92,75 @@ def create_short_puzzles_db():
         src_cursor = src_conn.cursor()
         dest_cursor = dest_conn.cursor()
 
-        # 1. Modify Schema: Add the new column to the CREATE statement
+        # 1. Inspect Source Schema
+        src_cursor.execute("SELECT * FROM puzzles LIMIT 1")
+        cols = [d[0] for d in src_cursor.description]
+        
+        # Find indices
+        try:
+            moves_idx = cols.index('Moves')
+            rating_idx = cols.index('Rating')
+            # Theme column might be 'Themes' or 'themes'
+            themes_col_name = next((c for c in cols if c.lower() == 'themes'), None)
+            if not themes_col_name:
+                raise ValueError("Could not find 'Themes' column in source.")
+            themes_idx = cols.index(themes_col_name)
+
+        except ValueError as e:
+            print(f"Schema Error: {e}")
+            print(f"Available columns: {cols}")
+            return
+
+        # 2. Prepare Destination Schema
         src_cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='puzzles';")
         original_sql = src_cursor.fetchone()[0]
         
-        # Best Practice: Inject the new column before the closing parenthesis
-        new_sql = original_sql.strip().rstrip(')') + ", rating_band TEXT)"
+        # Add rating_band AND boolean theme columns
+        # has_opening INTEGER, has_middlegame INTEGER, ...
+        extra_cols_def = ", rating_band TEXT"
+        for theme in THEMES_TO_INDEX:
+            extra_cols_def += f", has_{theme} INTEGER DEFAULT 0"
         
+        # Remove trailing parenthesis and append
+        new_sql = original_sql.strip().rstrip(')') + extra_cols_def + ")"
+        
+        print("Creating table with new schema...")
         dest_cursor.execute("DROP TABLE IF EXISTS puzzles;")
         dest_cursor.execute(new_sql)
         
-        # 2. Prepare Insertion
-        src_cursor.execute("SELECT * FROM puzzles")
-        cols = [d[0] for d in src_cursor.description]
-        moves_idx = cols.index('Moves')
-        rating_idx = cols.index('Rating')
-        
-        # One extra placeholder for the rating_band
-        placeholders = ",".join(["?"] * (len(cols) + 1))
+        # 3. Prepare Insertion
+        # Original columns + rating_band + len(THEMES_TO_INDEX)
+        total_cols = len(cols) + 1 + len(THEMES_TO_INDEX)
+        placeholders = ",".join(["?"] * total_cols)
         insert_query = f"INSERT INTO puzzles VALUES ({placeholders})"
 
         batch = []
         count = 0
         print(f"Migrating and Enriching data (Max Ply: {MAX_PLY})...")
         
+        # Re-query source for efficient iteration
+        src_cursor.execute("SELECT * FROM puzzles")
+        
         for row in src_cursor:
+            # Short puzzle check
             if len(row[moves_idx].split()) <= MAX_PLY:
-                # Add the band to the row tuple
+                
+                # 1. Band
                 band = get_band_label(row[rating_idx])
-                enriched_row = row + (band,)
+                
+                # 2. Themes
+                themes_str = row[themes_idx] or ""
+                # Use set for faster lookups (splitting by space)
+                row_themes = set(themes_str.split())
+                
+                theme_flags = []
+                for theme in THEMES_TO_INDEX:
+                    # Check if theme is present
+                    theme_flags.append(1 if theme in row_themes else 0)
+                
+                # Construct enriched row
+                # Original Tuple + Band + Theme Flags...
+                enriched_row = row + (band,) + tuple(theme_flags)
                 
                 batch.append(enriched_row)
                 
@@ -99,20 +169,31 @@ def create_short_puzzles_db():
                     dest_conn.commit()
                     count += len(batch)
                     batch = []
+                    print(f"Processed {count:,} records...", end='\r')
         
         if batch:
             dest_cursor.executemany(insert_query, batch)
             dest_conn.commit()
             count += len(batch)
+        
+        print(f"\nMigration complete. Total records: {count:,}")
 
-        # 3. Industry Standard: Add an Index on the new column for performance
-        print("Creating indexes...")
+        # 4. Create Indexes
+        print("Creating Base Indexes...")
         dest_cursor.execute("CREATE INDEX IF NOT EXISTS idx_rating_band ON puzzles(rating_band);")
         dest_cursor.execute("CREATE INDEX IF NOT EXISTS idx_puzzles_rating ON puzzles(Rating);")
         dest_cursor.execute("CREATE INDEX IF NOT EXISTS idx_puzzles_id ON puzzles(PuzzleId);")
         
-        # 4. Create User Tables (Merged Architecture)
-        print("Creating User Tables...")
+        print("Creating Partial Theme Indexes (Super Fast!)...")
+        for theme in THEMES_TO_INDEX:
+            col_name = f"has_{theme}"
+            idx_name = f"idx_theme_{theme}"
+            # Partial Index: Only index rows where this theme is true
+            # We include Rating in the index for faster range queries: "Give me endgame puzzles rated 1200-1400"
+            dest_cursor.execute(f"CREATE INDEX IF NOT EXISTS {idx_name} ON puzzles(Rating) WHERE {col_name} = 1;")
+
+        # 5. Create User Tables
+        print("Creating User Tables (Favorites & Progress)...")
         dest_cursor.execute('''
             CREATE TABLE IF NOT EXISTS user_progress (
                 puzzle_id TEXT PRIMARY KEY,
@@ -121,6 +202,13 @@ def create_short_puzzles_db():
             )
         ''')
         dest_cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_status ON user_progress(status)")
+
+        dest_cursor.execute('''
+            CREATE TABLE IF NOT EXISTS user_favorites (
+                puzzle_id TEXT PRIMARY KEY,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+        ''')
 
         dest_cursor.execute('''
             CREATE TABLE IF NOT EXISTS player_stats (
@@ -134,7 +222,8 @@ def create_short_puzzles_db():
         
         dest_conn.commit()
 
-        print(f"\nSuccess! '{DEST_DB}' created with {count:,} puzzles, user tables, and all indexes.")
+        print(f"\nSuccess! '{DEST_DB}' updated.")
+        print("Schema now includes Boolean Theme Columns and Partial Indexes.")
 
     finally:
         src_conn.close()

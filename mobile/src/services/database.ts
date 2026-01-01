@@ -66,7 +66,7 @@ export const DatabaseService = {
         return result;
     },
 
-    async getRandomPuzzle(userRating: number, band: string = 'All') {
+    async getRandomPuzzle(userRating: number, band: string = 'All', theme: string = 'all') {
         if (!this.db) await this.init();
 
         try {
@@ -94,10 +94,22 @@ export const DatabaseService = {
             minRating = Math.max(0, minRating);
             maxRating = Math.min(3500, maxRating);
 
-            let query = `SELECT * FROM puzzles WHERE Rating BETWEEN ? AND ? AND PuzzleId NOT IN (SELECT puzzle_id FROM user_progress WHERE status = 'win') ORDER BY RANDOM() LIMIT 1`;
+            // Base conditions: Rating Range AND Not Won
+            let whereClause = `Rating BETWEEN ? AND ? AND PuzzleId NOT IN (SELECT puzzle_id FROM user_progress WHERE status = 'win')`;
             let params: any[] = [minRating, maxRating];
 
+            // Theme Filter
+            if (theme && theme !== 'all') {
+                // IMPORTANT: Ensure 'theme' is safe/valid. 
+                // Since this comes from UI enum, it matches column name 'has_{theme}'
+                whereClause += ` AND has_${theme} = 1`;
+            }
+
+            let query = `SELECT * FROM puzzles WHERE ${whereClause} ORDER BY RANDOM() LIMIT 1`;
+
             if (band === 'Favorites') {
+                // Favorites logic ignores theme for now (or could support it?)
+                // Returning raw favorites is safer for "Review" mode
                 query = `SELECT * FROM puzzles JOIN user_favorites ON puzzles.PuzzleId = user_favorites.puzzle_id ORDER BY RANDOM() LIMIT 1`;
                 params = [];
             }

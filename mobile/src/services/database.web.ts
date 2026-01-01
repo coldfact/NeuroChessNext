@@ -11,14 +11,16 @@ export const DatabaseService = {
         return [];
     },
 
-    async getRandomPuzzle(rating: number, band?: string) {
+    async getRandomPuzzle(rating: number, band?: string, theme: string = 'all') {
         try {
-            console.log(`Web: Fetching puzzle for rating ${rating} band ${band}`);
-            console.log(`Web: Fetching puzzle for rating ${rating} band ${band}`);
+            console.log(`Web: Fetching puzzle for rating ${rating} band ${band} theme ${theme}`);
             let url = `${API_URL}/get_puzzles?count=1&mode=standard&rating=${Math.round(rating)}`;
 
             if (band && band !== 'All') {
                 url += `&band=${band}`;
+            }
+            if (theme && theme !== 'all') {
+                url += `&theme=${theme}`;
             }
 
             const response = await fetch(url);
