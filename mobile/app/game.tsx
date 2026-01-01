@@ -18,6 +18,7 @@ export default function GameScreen() {
     const [band, setBand] = useState('All');
     const [theme, setTheme] = useState('all');
     const [autoAdvance, setAutoAdvance] = useState(false);
+    const [settingsLoaded, setSettingsLoaded] = useState(false); // Defer puzzle load until settings ready
     const game = useChessGame(band, theme, autoAdvance);
 
     const [pieceSet, setPieceSet] = useState<PieceSet>('cburnett');
@@ -29,6 +30,7 @@ export default function GameScreen() {
     const [settingsVisible, setSettingsVisible] = useState(false);
     const [bandSelectorVisible, setBandSelectorVisible] = useState(false);
     const [themeSelectorVisible, setThemeSelectorVisible] = useState(false);
+    const [debugPuzzleId, setDebugPuzzleId] = useState<string | null>(null); // For debugging specific puzzles via URL
 
     // Load Settings
     useEffect(() => {
@@ -59,8 +61,22 @@ export default function GameScreen() {
 
                 const storedMode = await AsyncStorage.getItem('blindfoldMode');
                 if (storedMode === 'blindfold') game.setMode('blindfold');
+
+                // Check for debug puzzle ID in URL (web only)
+                if (typeof window !== 'undefined' && window.location) {
+                    const params = new URLSearchParams(window.location.search);
+                    const debugId = params.get('id');
+                    if (debugId) {
+                        console.log(`[Debug] Loading specific puzzle: ${debugId}`);
+                        setDebugPuzzleId(debugId);
+                    }
+                }
+
+                // Mark settings as loaded - this triggers the first puzzle fetch
+                setSettingsLoaded(true);
             } catch (e) {
                 console.log("Failed to load settings", e);
+                setSettingsLoaded(true); // Still allow puzzle load on error
             }
         })();
     }, []);
@@ -152,15 +168,31 @@ export default function GameScreen() {
 
     // Reactively load puzzle when Band OR Theme OR Mode changes
     // This removes the need for explicit nextPuzzle calls in handlers
+    // ONLY runs after BOTH settings AND stats are loaded
     useEffect(() => {
-        console.log(`[Effect: Config Change] Band=${band}, Theme=${theme}, Mode=${game.mode} -> Loading Puzzle`);
+        if (!settingsLoaded) {
+            console.log('[Effect: Config Change] Skipping - settings not loaded yet');
+            return;
+        }
+        if (!game.statsLoaded) {
+            console.log('[Effect: Config Change] Skipping - stats not loaded yet');
+            return;
+        }
+
         // Reset local UI state immediately to stop timers/anims
         setBlindfoldCountdown(0);
         setPiecesHidden(false);
 
-        // Call synchronously now that refs update immediately in render
-        game.nextPuzzle();
-    }, [band, theme, game.mode]);
+        // If debug puzzle ID is set, load that specific puzzle instead
+        if (debugPuzzleId) {
+            console.log(`[Effect: Config Change] Loading DEBUG puzzle: ${debugPuzzleId}`);
+            game.loadPuzzleById(debugPuzzleId);
+            setDebugPuzzleId(null); // Clear so future changes load random puzzles
+        } else {
+            console.log(`[Effect: Config Change] Band=${band}, Theme=${theme}, Mode=${game.mode} -> Loading Puzzle`);
+            game.nextPuzzle();
+        }
+    }, [band, theme, game.mode, settingsLoaded, game.statsLoaded, debugPuzzleId]);
 
     const isFinished = game.status.message === 'Solved!' || game.status.message === 'Solution Revealed';
 
@@ -345,7 +377,7 @@ export default function GameScreen() {
                 currentTheme={theme}
                 onSelectTheme={handleThemeChange}
             />
-        </SafeAreaView >
+        </SafeAreaView>
     );
 }
 

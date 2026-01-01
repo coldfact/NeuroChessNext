@@ -17,6 +17,7 @@ interface GameState {
     status: { message: string; color: string };
     highlights: { from?: string; to?: string };
     isLoading: boolean;
+    statsLoaded: boolean; // True when player stats are loaded from DB
     ratingApplied?: boolean;
     isFavorite?: boolean;
 }
@@ -38,6 +39,7 @@ export function useChessGame(initialBand: string, initialTheme: string, autoAdva
         highlights: {},
 
         isLoading: true,
+        statsLoaded: false, // Will be set true after DB stats load
         ratingApplied: false,
         isFavorite: false
     });
@@ -52,6 +54,7 @@ export function useChessGame(initialBand: string, initialTheme: string, autoAdva
     const isMounted = useRef(true); // To prevent state updates on unmounted component
 
     // Sync refs with props/state
+    const statsRef = useRef(state.stats); // Add ref for stats to avoid stale closure
     useEffect(() => {
         // Sync ref with current mode's rating
         const currentStats = state.stats[state.mode];
@@ -61,6 +64,7 @@ export function useChessGame(initialBand: string, initialTheme: string, autoAdva
             userRatingRef.current = 1200;
         }
         modeRef.current = state.mode;
+        statsRef.current = state.stats; // Keep stats ref updated
     }, [state.userRating, state.mode, state.stats]);
 
     // Sync refs immediately during render to avoid stale closures in callbacks
@@ -88,13 +92,20 @@ export function useChessGame(initialBand: string, initialTheme: string, autoAdva
                     standard: stdStats || undefined,
                     blindfold: blStats || undefined
                 };
-                // Determine initial rating based on current mode (default standard)
-                const initialRating = stdStats ? Math.round(stdStats.rating) : 1200;
+                // Use CURRENT mode's rating, not just standard
+                const currentMode = prev.mode;
+                const relevantStats = newStats[currentMode];
+                const initialRating = relevantStats ? Math.round(relevantStats.rating) : 1200;
+
+                // Update statsRef immediately so loadPuzzle can access it
+                statsRef.current = newStats;
+                userRatingRef.current = initialRating;
 
                 return {
                     ...prev,
                     userRating: initialRating,
-                    stats: newStats
+                    stats: newStats,
+                    statsLoaded: true // Stats are now ready
                 };
             });
 
@@ -125,15 +136,15 @@ export function useChessGame(initialBand: string, initialTheme: string, autoAdva
         }));
 
         try {
-            // Get Rating based on Mode
-            const getRatingForMode = (mode: 'standard' | 'blindfold', band: string) => {
-                const stats = state.stats[mode];
+            // Get Rating based on Mode - use statsRef to avoid stale closure
+            const getRatingForMode = (mode: 'standard' | 'blindfold') => {
+                const stats = statsRef.current[mode];
                 if (stats) {
                     return Math.round(stats.rating);
                 }
                 return 1200; // Default if no stats
             };
-            const userRating = getRatingForMode(modeRef.current, bandRef.current);
+            const userRating = getRatingForMode(modeRef.current);
             const currentTheme = themeRef.current;
 
             console.log(`[loadPuzzle] Mode=${modeRef.current}, Band=${bandRef.current}, Theme=${currentTheme}, Rating=${userRating}`);
@@ -225,6 +236,82 @@ export function useChessGame(initialBand: string, initialTheme: string, autoAdva
         }
     }, [game]); // Removed band dependency to rely on ref
 
+    // Load a specific puzzle by ID (for debugging)
+    const loadPuzzleById = useCallback(async (puzzleId: string) => {
+        console.log(`[loadPuzzleById] Loading puzzle: ${puzzleId}`);
+        if (isLoadingGlobal) return;
+        isLoadingGlobal = true;
+
+        setState(prev => ({
+            ...prev,
+            isLoading: true,
+            status: { message: 'Loading puzzle...', color: '#888' }
+        }));
+
+        try {
+            const puzzle = await DatabaseService.getPuzzleById(puzzleId);
+
+            if (!puzzle) {
+                setState(prev => ({
+                    ...prev,
+                    puzzleId: '',
+                    isLoading: false,
+                    status: { message: `Puzzle ${puzzleId} not found`, color: '#e74c3c' },
+                    fen: '8/8/8/8/8/8/8/8 w - - 0 1'
+                }));
+                return;
+            }
+
+            const isFav = await DatabaseService.checkFavorite(puzzle.PuzzleId);
+
+            if (isMounted.current) {
+                game.load(puzzle.FEN);
+                puzzleFenRef.current = puzzle.FEN;
+                setSolutionMoves(puzzle.Moves);
+                setMoveIndex(-1);
+                setState(prev => ({
+                    ...prev,
+                    puzzleId: puzzle.PuzzleId,
+                    puzzleRating: puzzle.Rating,
+                    fen: game.fen(),
+                    orientation: game.turn() === 'w' ? 'black' : 'white',
+                    status: { message: 'Your move...', color: '#eee' },
+                    isLoading: false,
+                    ratingApplied: false,
+                    isFavorite: isFav
+                }));
+
+                // Auto play opponent's first move
+                if (puzzle.Moves.length > 0) {
+                    setTimeout(async () => {
+                        try {
+                            const move = puzzle.Moves[0];
+                            game.move({ from: move.slice(0, 2), to: move.slice(2, 4), promotion: move.length > 4 ? move[4] : undefined });
+                            setMoveIndex(0);
+                            await soundService.playMove();
+                            setState(prev => ({
+                                ...prev,
+                                fen: game.fen(),
+                                highlights: { from: move.slice(0, 2), to: move.slice(2, 4) },
+                                status: { message: 'Your move...', color: '#eee' }
+                            }));
+                        } catch (e) {
+                            console.error("Auto-play move failed:", e);
+                        }
+                    }, 500);
+                }
+            }
+        } catch (e) {
+            console.error("Load Puzzle By ID Error", e);
+            setState(prev => ({
+                ...prev,
+                isLoading: false,
+                status: { message: 'Error', color: 'red' }
+            }));
+        } finally {
+            isLoadingGlobal = false;
+        }
+    }, [game]);
 
 
     const restartPuzzle = useCallback(() => {
@@ -269,22 +356,33 @@ export function useChessGame(initialBand: string, initialTheme: string, autoAdva
         }
     }, [game, solutionMoves]);
 
-    const handleMove = useCallback((from: string, to: string) => {
+    const handleMove = useCallback((from: string, to: string, promotion?: string) => {
         const expectedIndex = moveIndex + 1;
         const expectedMove = solutionMoves[expectedIndex];
         const moveAttempt = from + to;
 
-        // Check if correct move (allow promotion suffix mismatch for now, or auto-promote)
-        if (expectedMove && (moveAttempt === expectedMove || moveAttempt === expectedMove.slice(0, 4))) {
+        // For promotions, include the promotion suffix
+        const moveAttemptWithPromo = promotion ? moveAttempt + promotion : moveAttempt;
+
+        // Check if expected move is a promotion (has 5th character)
+        const expectedIsPromotion = expectedMove && expectedMove.length > 4;
+
+        // Validate move correctness
+        let isCorrect = false;
+        if (expectedIsPromotion) {
+            // For promotion moves, the FULL move including promotion piece must match
+            isCorrect = moveAttemptWithPromo === expectedMove;
+        } else {
+            // For non-promotion moves, just match the from-to squares
+            isCorrect = moveAttempt === expectedMove;
+        }
+
+        if (expectedMove && isCorrect) {
             // Correct!
             // Apply move safely
             try {
-                try {
-                    game.move({ from, to });
-                } catch (e) {
-                    // Try with promotion if simple move failed
-                    game.move({ from, to, promotion: 'q' });
-                }
+                // Use the promotion from user selection if provided, otherwise try without
+                const moveResult = game.move({ from, to, promotion: promotion as any });
             } catch (e) {
                 console.error("User move failed:", e);
                 return;
@@ -611,11 +709,14 @@ export function useChessGame(initialBand: string, initialTheme: string, autoAdva
     const toggleBlindfold = useCallback(() => {
         setState(prev => {
             const newMode = prev.mode === 'standard' ? 'blindfold' : 'standard';
+            const modeStats = prev.stats[newMode];
+            const newRating = modeStats ? Math.round(modeStats.rating) : 1200;
             // Set isLoading to true immediately to prevent UI flicker (e.g. Peek button showing briefly)
             // The useEffect in the consumer will trigger the actual data load
             return {
                 ...prev,
                 mode: newMode,
+                userRating: newRating, // Update displayed rating for new mode
                 isLoading: true,
                 status: { message: 'Switching mode...', color: '#888' }
             };
@@ -633,6 +734,7 @@ export function useChessGame(initialBand: string, initialTheme: string, autoAdva
         resetGameData,
         handleMove,
         nextPuzzle,
+        loadPuzzleById, // For debugging specific puzzles
         giveUp,
         navigateHistory,
         restartPuzzle, // Expose new function

@@ -156,7 +156,7 @@ def get_puzzles():
                     SELECT p.* 
                     FROM puzzles p
                     JOIN user_favorites uf ON p.PuzzleId = uf.puzzle_id
-                    ORDER BY RANDOM() LIMIT ?
+                    ORDER BY p.PuzzleId LIMIT ?
                  '''
                  params = [count]
             else:
@@ -223,7 +223,8 @@ def get_puzzles():
                  rows = cursor.execute(fallback_query, fallback_params).fetchall()
 
             if not rows:
-                return jsonify({"error": "No puzzles found matching the selection."}), 404
+                # Return empty array with 200 - let frontend handle "No puzzles" display
+                return jsonify({"user_rating": round(user_rating), "puzzles": []})
 
             # 3. Transform Row Objects to Serialized JSON
             puzzles = []

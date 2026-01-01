@@ -21,8 +21,10 @@ export default function BottomToolbar({
         <View style={styles.container}>
             {/* Band Selector */}
             <Pressable style={styles.toolItem} onPress={onOpenBandSelector}>
-                <BarChart2 color="#888" size={20} />
-                <Text style={styles.toolText}>{band === 'All' ? 'Rating' : band}</Text>
+                <BarChart2 color={band === 'All' ? '#888' : '#4ECDC4'} size={20} />
+                <Text style={[styles.toolText, band !== 'All' && styles.activeTextTheme]}>
+                    {band === 'All' ? 'Rating' : band}
+                </Text>
             </Pressable>
 
             {/* Theme Selector */}

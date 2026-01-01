@@ -66,6 +66,30 @@ export const DatabaseService = {
         return result;
     },
 
+    async getPuzzleById(puzzleId: string) {
+        if (!this.db) await this.init();
+
+        try {
+            const result = await this.db!.getFirstAsync<any>(
+                'SELECT * FROM puzzles WHERE PuzzleId = ?',
+                [puzzleId]
+            );
+
+            if (!result) return null;
+
+            return {
+                PuzzleId: result.PuzzleId,
+                FEN: result.FEN,
+                Moves: result.Moves.split(' '),
+                Rating: result.Rating,
+                rating_band: result.rating_band || result.Band,
+            };
+        } catch (error) {
+            console.error('Error getting puzzle by ID:', error);
+            return null;
+        }
+    },
+
     async getRandomPuzzle(userRating: number, band: string = 'All', theme: string = 'all') {
         if (!this.db) await this.init();
 

@@ -11,6 +11,29 @@ export const DatabaseService = {
         return [];
     },
 
+    async getPuzzleById(puzzleId: string) {
+        try {
+            console.log(`[Web API] Fetching puzzle by ID: ${puzzleId}`);
+            const response = await fetch(`${API_URL}/get_puzzle/${puzzleId}`);
+            if (!response.ok) {
+                console.error(`[Web API] Puzzle not found: ${puzzleId}`);
+                return null;
+            }
+            const puzzle = await response.json();
+            console.log('[Web API] Got puzzle:', puzzle.PuzzleId);
+            return {
+                PuzzleId: puzzle.PuzzleId,
+                FEN: puzzle.FEN,
+                Moves: puzzle.Moves,
+                Rating: puzzle.Rating,
+                Band: puzzle.rating_band || puzzle.Band
+            };
+        } catch (e) {
+            console.error("[Web API] getPuzzleById failed", e);
+            return null;
+        }
+    },
+
     async getRandomPuzzle(rating: number, band?: string, theme: string = 'all') {
         try {
             console.log(`Web: Fetching puzzle for rating ${rating} band ${band} theme ${theme}`);

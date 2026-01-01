@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions, Pressable, Alert } from 'react-native';
 import Piece from './Piece';
+import PromotionModal from './PromotionModal';
 import { BoardTheme, PieceSet } from '../constants';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
@@ -9,7 +10,7 @@ const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
 interface BoardProps {
     fen: string;
     orientation: 'white' | 'black';
-    onMove: (from: string, to: string) => void;
+    onMove: (from: string, to: string, promotion?: string) => void;
     highlights: { from?: string; to?: string };
     pieceSet: PieceSet;
     blindfold?: boolean;
@@ -24,6 +25,7 @@ export default function Board({
     const boardSize = Math.min(width - 32, 400); // Max width constraint
     const squareSize = boardSize / 8;
     const [selectedSquare, setSelectedSquare] = useState<string | null>(null);
+    const [pendingPromotion, setPendingPromotion] = useState<{ from: string, to: string } | null>(null);
 
     // Parse FEN
     const position = useMemo(() => {
@@ -78,12 +80,36 @@ export default function Board({
             }
 
             // Attempt move to empty square or capture opponent
-            onMove(selectedSquare, square);
-            setSelectedSquare(null);
+            // Check if this is a promotion move
+            const fromPiece = position[selectedSquare];
+            const isPawn = fromPiece?.toLowerCase() === 'p';
+            const targetRank = square[1];
+            const isPromotionRank = (orientation === 'white' && targetRank === '8') ||
+                (orientation === 'black' && targetRank === '1');
+
+            if (isPawn && isPromotionRank) {
+                // Show promotion modal instead of making move immediately
+                setPendingPromotion({ from: selectedSquare, to: square });
+                setSelectedSquare(null);
+            } else {
+                onMove(selectedSquare, square);
+                setSelectedSquare(null);
+            }
         } else if (isMyTurn) {
             // First tap - select piece (only if it's mine)
             setSelectedSquare(square);
         }
+    };
+
+    const handlePromotionSelect = (piece: 'q' | 'r' | 'b' | 'n') => {
+        if (pendingPromotion) {
+            onMove(pendingPromotion.from, pendingPromotion.to, piece);
+            setPendingPromotion(null);
+        }
+    };
+
+    const handlePromotionCancel = () => {
+        setPendingPromotion(null);
     };
 
     return (
@@ -125,6 +151,13 @@ export default function Board({
                     })}
                 </View>
             ))}
+
+            {/* Promotion Modal */}
+            <PromotionModal
+                visible={pendingPromotion !== null}
+                color={orientation}
+                onSelect={handlePromotionSelect}
+            />
         </View>
     );
 }
