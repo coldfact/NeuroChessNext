@@ -56,7 +56,8 @@ Unlike standard puzzle trainers, NeuroChess emphasizes "Blindfold" training—fo
 This app is the first text of a planned suite of cognitive training tools for chess:
 
 1.  **NeuroChess Puzzles** (Current): Visualization & Calculation.
-2.  **NeuroChess N-back**: Memory training variant.
-3.  **NeuroChess Combos**: Speed pattern recognition.
+2.  **NeuroChess Deep**: Long calculation (4+ moves) and visualization.
+3.  **NeuroChess N-back**: Memory training variant.
+4.  **NeuroChess Combos**: Speed pattern recognition.
 
 *A unified launcher will be added to select between these game modes.*

@@ -7,9 +7,11 @@ import random
 # Script is in python_scripts/, DBs are in root
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE_DB = os.path.join(BASE_DIR, "lichess_short_puzzles.sqlite")
-DEST_DB = os.path.join(BASE_DIR, "lichess_mobile_puzzles.sqlite")
+DEST_DB_BASE = os.path.join(BASE_DIR, "lichess_mobile_puzzles.sqlite")
+DEST_DB_EXTRA = os.path.join(BASE_DIR, "lichess_mobile_puzzles_extra.sqlite")
 
-PUZZLES_PER_BAND = 1000
+BASE_PER_BAND = 1000
+EXTRA_PER_BAND = 9000
 
 # Define your custom bands here for easy adjustment
 BANDS = [
@@ -24,126 +26,116 @@ BANDS = [
 
 def create_mobile_db():
     print(f"Source: {SOURCE_DB}")
-    print(f"Dest:   {DEST_DB}")
+    print(f"Dest Base:  {DEST_DB_BASE}")
+    print(f"Dest Extra: {DEST_DB_EXTRA}")
 
     if not os.path.exists(SOURCE_DB):
         print(f"Source database not found at {SOURCE_DB}")
         return
 
     # Delete existing to start fresh
-    if os.path.exists(DEST_DB):
-        try:
-            os.remove(DEST_DB)
-        except OSError:
-            print("Warning: Could not remove existing DB (might be in use).")
+    for db_path in [DEST_DB_BASE, DEST_DB_EXTRA]:
+        if os.path.exists(db_path):
+            try:
+                os.remove(db_path)
+            except OSError:
+                print(f"Warning: Could not remove existing DB {db_path} (might be in use).")
 
     src_conn = sqlite3.connect(SOURCE_DB)
-    dest_conn = sqlite3.connect(DEST_DB)
-    
+    # Open connections to BOTH destinations
+    dest_conn_base = sqlite3.connect(DEST_DB_BASE)
+    dest_conn_extra = sqlite3.connect(DEST_DB_EXTRA)
+
     try:
         src_cursor = src_conn.cursor()
-        dest_cursor = dest_conn.cursor()
+        dest_cursor_base = dest_conn_base.cursor()
+        dest_cursor_extra = dest_conn_extra.cursor()
 
-        # 1. Inspect Source Schema to get exact column count for placeholders
-        src_cursor.execute("SELECT * FROM puzzles LIMIT 1")
-        col_names = [description[0] for description in src_cursor.description]
-        col_count = len(col_names)
-        
-        print(f"Schema detected: {col_count} columns.")
+        # 1. Create Schema in BOTH (Identical)
+        schema_query = '''
+        CREATE TABLE IF NOT EXISTS puzzles (
+            PuzzleId TEXT PRIMARY KEY,
+            FEN TEXT,
+            Moves TEXT,
+            Rating INTEGER,
+            Themes TEXT,
+            rating_band TEXT,
+            has_opening BOOLEAN DEFAULT 0,
+            has_middlegame BOOLEAN DEFAULT 0,
+            has_endgame BOOLEAN DEFAULT 0,
+            has_attraction BOOLEAN DEFAULT 0,
+            has_defensiveMove BOOLEAN DEFAULT 0,
+            has_deflection BOOLEAN DEFAULT 0,
+            has_discoveredAttack BOOLEAN DEFAULT 0,
+            has_hangingPiece BOOLEAN DEFAULT 0,
+            has_intermezzo BOOLEAN DEFAULT 0,
+            has_quietMove BOOLEAN DEFAULT 0,
+            has_sacrifice BOOLEAN DEFAULT 0,
+            has_skewer BOOLEAN DEFAULT 0
+        );
+        CREATE INDEX IF NOT EXISTS idx_band ON puzzles(rating_band);
+        CREATE INDEX IF NOT EXISTS idx_rating ON puzzles(Rating);
+        CREATE INDEX IF NOT EXISTS idx_puzzles_id ON puzzles(PuzzleId);
+        '''
+        dest_cursor_base.executescript(schema_query)
+        dest_cursor_extra.executescript(schema_query)
 
-        # 2. Copy Schema (Table Creation)
-        print("Creating schema...")
-        src_cursor.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='puzzles';")
-        create_sql = src_cursor.fetchone()[0]
-        dest_cursor.execute(create_sql)
-        
-        # 3. Extract Puzzles (Preserving ALL columns including flags)
-        # Use simple placeholders matching column count
-        placeholders = ",".join(["?"] * col_count)
-        select_query = f"SELECT * FROM puzzles WHERE rating_band = ? ORDER BY RANDOM() LIMIT ?"
-        insert_query = f"INSERT INTO puzzles VALUES ({placeholders})"
+        # 2. Iterate Bands and Fill Both
+        total_base = 0
+        total_extra = 0
 
-        total_count = 0
-        
-        print(f"Extracting {PUZZLES_PER_BAND} puzzles per band...")
-        
-        for band_label, _, _ in BANDS:
-            print(f"  Processing {band_label}...", end=' ')
-            src_cursor.execute(select_query, (band_label, PUZZLES_PER_BAND))
+        for label, low, high in BANDS:
+            print(f"Processing {label}...")
+            
+            # Fetch ENOUGH for both (Base + Extra)
+            limit = BASE_PER_BAND + EXTRA_PER_BAND
+            
+            # Explicitly select columns to match the target schema (18 columns)
+            cols = "PuzzleId, FEN, Moves, Rating, Themes, rating_band, has_opening, has_middlegame, has_endgame, has_attraction, has_defensiveMove, has_deflection, has_discoveredAttack, has_hangingPiece, has_intermezzo, has_quietMove, has_sacrifice, has_skewer"
+            
+            # Use ORDER BY RANDOM() to get shuffling
+            query = f"""
+                SELECT {cols} FROM puzzles 
+                WHERE rating_band = ? 
+                ORDER BY RANDOM()
+                LIMIT {limit}
+            """
+            src_cursor.execute(query, (label,))
             rows = src_cursor.fetchall()
             
-            if rows:
-                dest_cursor.executemany(insert_query, rows)
-                dest_conn.commit()
-                count = len(rows)
-                total_count += count
-                print(f"Added {count} puzzles")
-            else:
-                print(f"Found 0 puzzles!")
+            # Split rows
+            base_rows = rows[:BASE_PER_BAND]
+            extra_rows = rows[BASE_PER_BAND:]
+            
+            print(f"  -> Found {len(rows)} puzzles. Base: {len(base_rows)}, Extra: {len(extra_rows)}")
 
-        # 4. Copy Indexes? 
-        # The CREATE TABLE statement in sqlite_master doesn't include indexes usually.
-        # We should create them.
-        print("\nCreating indexes...")
-        dest_cursor.execute("CREATE INDEX IF NOT EXISTS idx_rating_band ON puzzles(rating_band);")
-        dest_cursor.execute("CREATE INDEX IF NOT EXISTS idx_puzzles_rating ON puzzles(Rating);")
-        dest_cursor.execute("CREATE INDEX IF NOT EXISTS idx_puzzles_id ON puzzles(PuzzleId);")
-        
-        # Re-create Partial Indexes if usage intended
-        # We can dynamically fetch them from source SQL or just hardcode common ones
-        # For mobile size optimization, detailed theme indexes might be overkill 
-        # BUT user wanted "first step towards thematic training".
-        # Let's create indexes on the boolean columns for at least the main ones if columns exist
-        if 'has_opening' in col_names:
-             print("Creating Theme Indexes...")
-             # Just iterate a known list or inspect columns starting with 'has_'
-             for col in col_names:
-                 if col.startswith('has_'):
-                     idx_name = f"idx_{col}"
-                     dest_cursor.execute(f"CREATE INDEX IF NOT EXISTS {idx_name} ON puzzles(Rating) WHERE {col} = 1;")
+            # Insert Base
+            if base_rows:
+                placeholders = ','.join(['?'] * len(base_rows[0]))
+                dest_cursor_base.executemany(f"INSERT INTO puzzles VALUES ({placeholders})", base_rows)
+                total_base += len(base_rows)
 
-        # 5. Create User Tables
-        print("Creating User Tables...")
-        dest_cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_progress (
-                puzzle_id TEXT PRIMARY KEY,
-                status TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        dest_cursor.execute("CREATE INDEX IF NOT EXISTS idx_user_status ON user_progress(status)")
+            # Insert Extra
+            if extra_rows:
+                placeholders = ','.join(['?'] * len(extra_rows[0]))
+                dest_cursor_extra.executemany(f"INSERT INTO puzzles VALUES ({placeholders})", extra_rows)
+                total_extra += len(extra_rows)
 
-        dest_cursor.execute('''
-            CREATE TABLE IF NOT EXISTS user_favorites (
-                puzzle_id TEXT PRIMARY KEY,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
+        # 3. Optimize (Vacuum)
+        for conn in [dest_conn_base, dest_conn_extra]:
+            conn.commit()
+            conn.execute("VACUUM")
 
-        # Player stats
-        dest_cursor.execute('''
-            CREATE TABLE IF NOT EXISTS player_stats (
-                mode TEXT PRIMARY KEY,
-                rating REAL,
-                rd REAL,
-                vol REAL,
-                last_active DATETIME DEFAULT CURRENT_TIMESTAMP
-            )
-        ''')
-        
-        dest_conn.commit()
+        print("\nComplete!")
+        print(f"Base DB Puzzles:  {total_base}")
+        print(f"Extra DB Puzzles: {total_extra}")
 
-        # Vacuum
-        print("Vacuuming database...")
-        dest_cursor.execute("VACUUM;")
-
-        size_mb = os.path.getsize(DEST_DB) / 1024 / 1024
-        print(f"\nSuccess! '{os.path.basename(DEST_DB)}' created with {total_count:,} puzzles.")
-        print(f"File size: {size_mb:.2f} MB")
-
+    except Exception as e:
+        print(f"Error: {e}")
     finally:
         src_conn.close()
-        dest_conn.close()
+        dest_conn_base.close()
+        dest_conn_extra.close()
 
 if __name__ == "__main__":
     create_mobile_db()

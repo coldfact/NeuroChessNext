@@ -26,38 +26,39 @@ const PIECE_SYMBOLS_BLACK: Record<PromotionPiece, string> = {
 };
 
 export default function PromotionModal({ visible, color, onSelect }: PromotionModalProps) {
+    if (!visible) return null;
+
     const symbols = color === 'white' ? PIECE_SYMBOLS_WHITE : PIECE_SYMBOLS_BLACK;
 
     return (
-        <Modal
-            visible={visible}
-            transparent
-            animationType="fade"
-        >
-            <View style={styles.overlay}>
-                <View style={styles.container}>
-                    {PROMOTION_PIECES.map((piece) => (
-                        <Pressable
-                            key={piece}
-                            style={styles.pieceButton}
-                            onPress={() => onSelect(piece)}
-                        >
-                            <Text style={styles.pieceSymbol}>{symbols[piece]}</Text>
-                        </Pressable>
-                    ))}
-                </View>
+        <View style={styles.overlay}>
+            <View style={styles.container}>
+                {PROMOTION_PIECES.map((piece) => (
+                    <Pressable
+                        key={piece}
+                        style={styles.pieceButton}
+                        onPress={() => onSelect(piece)}
+                    >
+                        <Text style={styles.pieceSymbol}>{symbols[piece]}</Text>
+                    </Pressable>
+                ))}
             </View>
-        </Modal>
+        </View>
     );
 }
 
 const styles = StyleSheet.create({
     overlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 100,
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
         justifyContent: 'flex-start',
         alignItems: 'center',
-        paddingTop: 120, // Position near top of board
+        paddingTop: 60, // Position near top of board (adjusted since it's relative to board now)
     },
     container: {
         flexDirection: 'row',

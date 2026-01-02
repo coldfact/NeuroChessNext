@@ -8,7 +8,7 @@ BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE_DB = os.path.join(BASE_DIR, "lichess_db_puzzles.sqlite")
 DEST_DB = os.path.join(BASE_DIR, "lichess_short_puzzles.sqlite")
 
-MAX_PLY = 4
+MAX_PLY = 6
 BATCH_SIZE = 10000
 
 # Define your custom bands here for easy adjustment

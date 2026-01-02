@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, Animated, Pressable, Linking } from 'react-native';
-import { ExternalLink, Heart } from 'lucide-react-native';
+import { ExternalLink, Heart, ShoppingBag } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useRouter } from 'expo-router';
 import Board from '../src/components/Board';
 import Controls from '../src/components/Controls';
 import BottomToolbar from '../src/components/BottomToolbar';
@@ -15,6 +16,7 @@ import ThemeSelectorModal, { Theme } from '../src/components/ThemeSelectorModal'
 import { Target } from 'lucide-react-native';
 
 export default function GameScreen() {
+    const router = useRouter();
     const [band, setBand] = useState('All');
     const [theme, setTheme] = useState('all');
     const [autoAdvance, setAutoAdvance] = useState(false);
@@ -239,6 +241,15 @@ export default function GameScreen() {
                             {game.status.message}
                         </Text>
                     </View>
+
+                    {/* Store Button */}
+                    <Pressable
+                        onPress={() => router.push('/store')}
+                        style={{ padding: 10 }}
+                        hitSlop={10}
+                    >
+                        <ShoppingBag color="#f39c12" size={24} />
+                    </Pressable>
                 </View>
             </View>
 
@@ -290,15 +301,11 @@ export default function GameScreen() {
                 isLoading={game.isLoading}
                 showPeek={game.mode === 'blindfold' && blindfoldCountdown === 0 && !game.isLoading}
                 onPeek={() => {
-                    if (piecesHidden) {
-                        // User wants to peek (Reveal pieces)
-                        setPiecesHidden(false);
-                    } else {
-                        // User wants to retry/restart blindfold on CURRENT puzzle
-                        setPiecesHidden(false);
-                        setBlindfoldCountdown(0);
-                        game.restartPuzzle();
-                    }
+                    // Peek acts as a Retry/Reset in ALL cases to prevent cheating
+                    // This restarts the visualization from the beginning
+                    setPiecesHidden(false);
+                    setBlindfoldCountdown(0);
+                    game.restartPuzzle();
                 }}
             />
 

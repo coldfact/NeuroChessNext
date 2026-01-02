@@ -13,8 +13,8 @@ CORS(app)  # Enable CORS for all routes
 
 # --- ARCHITECTURAL CONFIGURATION ---
 # Absolute path to your filtered SQLite database
-DB_PATH = r"A:\applications\torok\lichess_short_puzzles.sqlite"
-USER_DB_PATH = r"A:\applications\torok\user_data.sqlite"
+DB_PATH = r"A:\applications\torok\lichess_mobile_puzzles.sqlite"
+DLC_PATH = r"A:\applications\torok\lichess_mobile_puzzles_extra.sqlite"
 
 def init_user_db():
     # Now creates tables in the Main DB
@@ -455,6 +455,26 @@ def update_stats():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/dlc/puzzles_v1')
+def download_dlc_puzzles():
+    """
+    Serves the extra puzzles database file.
+    This mimics a CDN/S3 bucket download.
+    """
+    if not os.path.exists(DLC_PATH):
+        return jsonify({"error": "DLC file not found"}), 404
+        
+    try:
+        from flask import send_file
+        return send_file(
+            DLC_PATH, 
+            as_attachment=True, 
+            download_name='puzzles_expansion_v1.sqlite',
+            mimetype='application/x-sqlite3'
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 # --- ENTRY POINT ---
 
 if __name__ == '__main__':
@@ -468,4 +488,9 @@ if __name__ == '__main__':
         print("!" * 50)
     
     # Run server on localhost:5000 with debug enabled for development
+    print("Starting NeuroChess Server...")
+    print(f"Using DB: {DB_PATH}")
+    if os.path.exists(DLC_PATH):
+        print(f"DLC Pack available: {DLC_PATH}")
+        print(f"DLC Endpoint: /api/dlc/puzzles_v1")
     app.run(debug=True, port=5000)

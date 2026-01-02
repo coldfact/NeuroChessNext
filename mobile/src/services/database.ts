@@ -220,5 +220,25 @@ export const DatabaseService = {
         // Clear history and favorites
         await this.db!.runAsync(`DELETE FROM user_progress`);
         await this.db!.runAsync(`DELETE FROM user_favorites`);
+    },
+
+    async mergeDLC(localUri: string) {
+        if (!this.db) await this.init();
+
+        console.log('[DatabaseService] Attaching DLC:', localUri);
+
+        // 1. ATTACH
+        // Note: runAsync allows multiple statements? No, safer to run sequentially.
+        // Also simpler string interpolation for attached DB path
+        await this.db!.runAsync(`ATTACH DATABASE '${localUri}' AS dlc`);
+
+        // 2. MERGE
+        // We use INSERT OR IGNORE to skip duplicates
+        await this.db!.runAsync(`INSERT OR IGNORE INTO main.puzzles SELECT * FROM dlc.puzzles`);
+
+        // 3. DETACH
+        await this.db!.runAsync(`DETACH DATABASE dlc`);
+
+        console.log('[DatabaseService] DLC Merge Complete');
     }
 };
