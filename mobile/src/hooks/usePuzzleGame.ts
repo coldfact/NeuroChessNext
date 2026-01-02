@@ -23,7 +23,7 @@ interface GameState {
 }
 
 // Note: We now control puzzle loading from the component via nextPuzzle, but we keep the logic here.
-export function useChessGame(initialBand: string, initialTheme: string, autoAdvance: boolean) {
+export function usePuzzleGame(initialBand: string, initialTheme: string, autoAdvance: boolean) {
     const [game] = useState(() => new Chess());
     const [solutionMoves, setSolutionMoves] = useState<string[]>([]);
     const [moveIndex, setMoveIndex] = useState(-1);

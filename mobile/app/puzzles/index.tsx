@@ -1,18 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet, View, Text, Animated, Pressable, Linking } from 'react-native';
-import { ExternalLink, Heart, ShoppingBag } from 'lucide-react-native';
+import { ExternalLink, Heart, ShoppingBag, Home } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
-import Board from '../src/components/Board';
-import Controls from '../src/components/Controls';
-import BottomToolbar from '../src/components/BottomToolbar';
-import SettingsModal from '../src/components/SettingsModal';
-import BandSelectorModal from '../src/components/BandSelectorModal';
-import { useChessGame } from '../src/hooks/useChessGame';
-import { BoardTheme, BOARD_THEMES, PieceSet, PIECE_SETS } from '../src/constants';
-import ThemeSelectorModal, { Theme } from '../src/components/ThemeSelectorModal';
+import Board from '../../src/components/Board';
+import Controls from '../../src/components/Controls';
+import BottomToolbar from '../../src/components/BottomToolbar';
+import SettingsModal from '../../src/components/SettingsModal';
+import BandSelectorModal from '../../src/components/BandSelectorModal';
+import { usePuzzleGame } from '../../src/hooks/usePuzzleGame';
+import { BoardTheme, BOARD_THEMES, PieceSet, PIECE_SETS } from '../../src/constants';
+import ThemeSelectorModal, { Theme } from '../../src/components/ThemeSelectorModal';
 import { Target } from 'lucide-react-native';
 
 export default function GameScreen() {
@@ -21,7 +21,7 @@ export default function GameScreen() {
     const [theme, setTheme] = useState('all');
     const [autoAdvance, setAutoAdvance] = useState(false);
     const [settingsLoaded, setSettingsLoaded] = useState(false); // Defer puzzle load until settings ready
-    const game = useChessGame(band, theme, autoAdvance);
+    const game = usePuzzleGame(band, theme, autoAdvance);
 
     const [pieceSet, setPieceSet] = useState<PieceSet>('cburnett');
     const [boardTheme, setBoardTheme] = useState<BoardTheme>(BOARD_THEMES[0]);
@@ -204,6 +204,15 @@ export default function GameScreen() {
 
             <View style={styles.headerWrapper}>
                 <View style={styles.header}>
+                    {/* Home Button */}
+                    <Pressable
+                        onPress={() => router.back()}
+                        style={{ padding: 10, marginRight: 5 }}
+                        hitSlop={10}
+                    >
+                        <Home color="#888" size={24} />
+                    </Pressable>
+
                     <View style={styles.ratingBadge}>
                         <Text style={styles.ratingText}>
                             {game.userRating}
@@ -242,14 +251,7 @@ export default function GameScreen() {
                         </Text>
                     </View>
 
-                    {/* Store Button */}
-                    <Pressable
-                        onPress={() => router.push('/store')}
-                        style={{ padding: 10 }}
-                        hitSlop={10}
-                    >
-                        <ShoppingBag color="#f39c12" size={24} />
-                    </Pressable>
+                    {/* Store Button Removed (Moved to Launcher) */}
                 </View>
             </View>
 
@@ -384,7 +386,7 @@ export default function GameScreen() {
                 currentTheme={theme}
                 onSelectTheme={handleThemeChange}
             />
-        </SafeAreaView>
+        </SafeAreaView >
     );
 }
 
@@ -401,8 +403,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         padding: 20,
         alignItems: 'center',
-        justifyContent: 'space-between', // Push items to edges
-        width: 350, // Match board width
+        justifyContent: 'flex-start', // Align items to the left
+        width: '100%', // Full width to anchor to screen edge
     },
     ratingBadge: {
         backgroundColor: '#222',

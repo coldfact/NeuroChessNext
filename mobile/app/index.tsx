@@ -1,75 +1,151 @@
-import { View, Text, Pressable, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
-import { Play } from 'lucide-react-native';
+import React from 'react';
+import { StyleSheet, View, Text, Pressable, Image } from 'react-native';
+import { Link, useRouter } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Brain, Grid3X3, Trophy, ShoppingBag } from 'lucide-react-native';
 
-export default function HomeScreen() {
+export default function Launcher() {
     const router = useRouter();
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>NeuroChess</Text>
-            <Text style={styles.subtitle}>Chess Puzzle Trainer</Text>
+        <SafeAreaView style={styles.container}>
+            <StatusBar style="light" />
 
-            <Pressable
-                style={styles.startButton}
-                onPress={() => router.push('/game')}
-            >
-                <Play color="#fff" size={24} />
-                <Text style={styles.buttonText}>Start Training</Text>
-            </Pressable>
-
-            <View style={styles.statsContainer}>
-                <Text style={styles.statLabel}>Your Rating</Text>
-                <Text style={styles.statValue}>1200</Text>
+            <View style={styles.header}>
+                <Text style={styles.title}>NeuroChess</Text>
+                <Text style={styles.subtitle}>Train Your Brain</Text>
             </View>
-        </View>
+
+            <View style={styles.grid}>
+                {/* Main Feature: Puzzles */}
+                <Pressable
+                    style={[styles.card, styles.cardLarge]}
+                    onPress={() => router.push('/puzzles')}
+                >
+                    <View style={styles.iconContainer}>
+                        <Brain color="#f1c40f" size={40} />
+                    </View>
+                    <View style={styles.cardContent}>
+                        <Text style={styles.cardTitle}>Puzzles</Text>
+                        <Text style={styles.cardDesc}>Pattern Recognition & Calculation</Text>
+                    </View>
+                </Pressable>
+
+                {/* Future Feature: N-Back */}
+                <View style={[styles.card, styles.cardDisabled]}>
+                    <View style={styles.iconContainer}>
+                        <Grid3X3 color="#555" size={32} />
+                    </View>
+                    <View style={styles.cardContent}>
+                        <Text style={[styles.cardTitle, { color: '#555' }]}>N-Back</Text>
+                        <Text style={styles.cardDesc}>Memory Mastery (Coming Soon)</Text>
+                    </View>
+                </View>
+
+                {/* Future Feature: Deep */}
+                <View style={[styles.card, styles.cardDisabled]}>
+                    <View style={styles.iconContainer}>
+                        <Trophy color="#555" size={32} />
+                    </View>
+                    <View style={styles.cardContent}>
+                        <Text style={[styles.cardTitle, { color: '#555' }]}>Deep Calc</Text>
+                        <Text style={styles.cardDesc}>Visualization Training (Coming Soon)</Text>
+                    </View>
+                </View>
+
+                {/* DLC Store */}
+                <Pressable
+                    style={[styles.card, { marginTop: 20, borderColor: '#f39c12', borderWidth: 1 }]}
+                    onPress={() => router.push('/store')}
+                >
+                    <View style={styles.iconContainer}>
+                        <ShoppingBag color="#f39c12" size={32} />
+                    </View>
+                    <View style={styles.cardContent}>
+                        <Text style={[styles.cardTitle, { color: '#f39c12' }]}>Store</Text>
+                        <Text style={styles.cardDesc}>Get Expansion Packs</Text>
+                    </View>
+                </Pressable>
+            </View>
+
+            <View style={styles.footer}>
+                <Text style={styles.version}>v1.0.0 (Suite Edition)</Text>
+            </View>
+        </SafeAreaView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#1a1a1a',
+        backgroundColor: '#111',
+    },
+    header: {
+        paddingVertical: 40,
         alignItems: 'center',
-        justifyContent: 'center',
-        padding: 20,
     },
     title: {
         fontSize: 42,
-        fontWeight: 'bold',
+        fontWeight: '900',
         color: '#fff',
-        marginBottom: 8,
+        letterSpacing: 2,
     },
     subtitle: {
-        fontSize: 18,
+        fontSize: 16,
         color: '#888',
-        marginBottom: 60,
+        marginTop: 5,
+        textTransform: 'uppercase',
+        letterSpacing: 3,
     },
-    startButton: {
+    grid: {
+        padding: 20,
+        gap: 15,
+    },
+    card: {
+        backgroundColor: '#222',
+        borderRadius: 16,
+        padding: 20,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
-        backgroundColor: '#2980b9',
-        paddingVertical: 16,
-        paddingHorizontal: 32,
-        borderRadius: 12,
-        marginBottom: 40,
+        borderWidth: 1,
+        borderColor: '#333',
     },
-    buttonText: {
-        color: '#fff',
-        fontSize: 20,
-        fontWeight: '600',
+    cardLarge: {
+        backgroundColor: '#2a2a2a',
+        borderColor: '#444',
+        paddingVertical: 30,
     },
-    statsContainer: {
+    cardDisabled: {
+        opacity: 0.6,
+        borderColor: '#222',
+        backgroundColor: '#1a1a1a',
+    },
+    iconContainer: {
+        width: 60,
         alignItems: 'center',
+        justifyContent: 'center',
     },
-    statLabel: {
-        color: '#666',
-        fontSize: 14,
+    cardContent: {
+        flex: 1,
     },
-    statValue: {
-        color: '#f1c40f',
-        fontSize: 32,
+    cardTitle: {
+        fontSize: 22,
         fontWeight: 'bold',
+        color: '#eee',
+        marginBottom: 4,
     },
+    cardDesc: {
+        fontSize: 14,
+        color: '#888',
+    },
+    footer: {
+        marginTop: 'auto',
+        alignItems: 'center',
+        padding: 20,
+    },
+    version: {
+        color: '#444',
+        fontSize: 12,
+    }
 });
