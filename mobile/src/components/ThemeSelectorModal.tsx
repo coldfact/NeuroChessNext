@@ -252,11 +252,12 @@ const styles = StyleSheet.create({
     grid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 12,
+        gap: 8,
+        justifyContent: 'space-between', // Ensures even spacing
     },
     gridOption: {
-        width: '31%', // Fits 3 in a row with gap
-        height: 85,   // Fixed height instead of square to save vertical space
+        width: '30%', // Fits 3 in a row comfortably
+        height: 75,   // Slightly shorter
         backgroundColor: '#252525',
         borderRadius: 12,
         alignItems: 'center',

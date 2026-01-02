@@ -19,7 +19,7 @@ export const DatabaseService = {
         const fileInfo = await FileSystem.getInfoAsync(dbPath);
         if (!fileInfo.exists) {
             console.log("Initialize: Copying bundled database...");
-            const asset = Asset.fromModule(require('../../assets/starter_puzzles.db'));
+            const asset = Asset.fromModule(require('../../assets/neurochess.db'));
             await asset.downloadAsync();
             await FileSystem.copyAsync({
                 from: asset.localUri || asset.uri,
@@ -99,8 +99,9 @@ export const DatabaseService = {
             let maxRating = 3500;
 
             if (band && band !== 'All') {
-                if (band.includes('+')) {
-                    minRating = parseInt(band.replace('+', ''));
+                if (band.includes('+') || band.includes('PLUS')) {
+                    const clean = band.replace('+', '').replace('PLUS', '').replace('-', '');
+                    minRating = parseInt(clean);
                 } else {
                     const parts = band.split('-');
                     if (parts.length === 2) {
@@ -227,10 +228,13 @@ export const DatabaseService = {
 
         console.log('[DatabaseService] Attaching DLC:', localUri);
 
+        // SQLite native expects path without file:// on Android
+        const dbPath = localUri.replace('file://', '');
+
         // 1. ATTACH
         // Note: runAsync allows multiple statements? No, safer to run sequentially.
         // Also simpler string interpolation for attached DB path
-        await this.db!.runAsync(`ATTACH DATABASE '${localUri}' AS dlc`);
+        await this.db!.runAsync(`ATTACH DATABASE '${dbPath}' AS dlc`);
 
         // 2. MERGE
         // We use INSERT OR IGNORE to skip duplicates

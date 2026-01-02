@@ -1,20 +1,13 @@
 import React, { useMemo } from 'react';
-import { View, Image, ImageSourcePropType } from 'react-native';
+import { View } from 'react-native';
+import { SvgProps } from 'react-native-svg';
 
 // Dynamically import all pieces from all sets
-// This is tedious in RN without dynamic require, so we map them explicitly.
-// Since we have 4 sets * 12 pieces = 48 imports, let's keep it organized.
-
 type PieceSet = 'cburnett' | 'merida' | 'fresca' | 'horsey';
 
-// SVG loading for React Native Web / Expo can be tricky.
-// Usually with react-native-svg-transformer, 'import Logo from ...' works.
-// But we are using require().
-// If web definition is creating issues, we might need a different approach.
-// For now, let's try to handle both .default and module exports.
-
-
-const PIECE_IMPORTS: Record<PieceSet, Record<string, ImageSourcePropType>> = {
+// With react-native-svg-transformer, require() returns the SVG component.
+// It might be wrapped in .default if adhering to strict ESM interop.
+const PIECE_IMPORTS: Record<PieceSet, Record<string, any>> = {
     cburnett: {
         wP: require('../../assets/pieces/cburnett/wP.svg'),
         wN: require('../../assets/pieces/cburnett/wN.svg'),
@@ -80,7 +73,7 @@ interface PieceProps {
 }
 
 export default function Piece({ piece, size, set = 'cburnett' }: PieceProps) {
-    const source = useMemo(() => {
+    const SvgComponent = useMemo(() => {
         // Handle FEN single-char codes (e.g. 'P' -> 'wP', 'n' -> 'bN')
         let key = piece;
         if (piece.length === 1) {
@@ -89,10 +82,11 @@ export default function Piece({ piece, size, set = 'cburnett' }: PieceProps) {
             key = `${color}${type}`;
         }
 
-        return PIECE_IMPORTS[set]?.[key];
+        const module = PIECE_IMPORTS[set]?.[key];
+        return module?.default || module;
     }, [piece, set]);
 
-    if (!source) return null;
+    if (!SvgComponent) return null;
 
     // Scale correction for specific sets
     const scale = set === 'merida' ? 0.85 : 1.0;
@@ -100,11 +94,7 @@ export default function Piece({ piece, size, set = 'cburnett' }: PieceProps) {
 
     return (
         <View style={{ width: size, height: size, justifyContent: 'center', alignItems: 'center' }}>
-            <Image
-                source={source}
-                style={{ width: scaledSize, height: scaledSize }}
-                resizeMode="contain"
-            />
+            <SvgComponent width={scaledSize} height={scaledSize} />
         </View>
     );
 }

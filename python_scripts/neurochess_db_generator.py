@@ -15,7 +15,7 @@ MOBILE_DB_SCRIPT = os.path.join(SCRIPT_DIR, "create_mobile_db.py")
 
 # File Paths
 MOBILE_DB_SOURCE = os.path.join(ROOT_DIR, "lichess_mobile_puzzles.sqlite")
-MOBILE_ASSET_DEST = os.path.join(ROOT_DIR, "mobile", "assets", "starter_puzzles.db")
+MOBILE_ASSET_DEST = os.path.join(ROOT_DIR, "mobile", "assets", "neurochess.db")
 
 def run_step(description, command):
     print(f"\n[STEP] {description}")

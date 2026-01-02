@@ -3,12 +3,9 @@ import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, ActivityIn
 import { Stack, useRouter } from 'expo-router';
 import { ChevronLeft, Brain, Layers, ShoppingBag, RefreshCw, Check, DownloadCloud } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 import { DatabaseService } from '../src/services/database';
-
-// Helper for local dev URL
-const API_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5000' : 'http://localhost:5000';
-const DLC_ENDPOINT = `${API_URL}/api/dlc/puzzles_v1`;
+import { DLC_ENDPOINT } from '../src/config';
 
 export default function StoreScreen() {
     const router = useRouter();
@@ -63,19 +60,15 @@ export default function StoreScreen() {
             const fileUri = FileSystem.cacheDirectory + 'puzzles_expansion.sqlite';
 
             // 2. Download
-            // Note: createDownloadResumable is robust
-            const downloadResumable = FileSystem.createDownloadResumable(
-                DLC_ENDPOINT,
-                fileUri,
-                {},
-                (downloadProgress) => {
-                    const progress = downloadProgress.totalBytesWritten / downloadProgress.totalBytesExpectedToWrite;
-                    setDownloadProgress(progress);
-                }
-            );
-
+            // Switch to downloadAsync for stability on Emulator
             console.log(`Downloading DLC from ${DLC_ENDPOINT}...`);
-            const result = await downloadResumable.downloadAsync();
+
+            // downloadAsync is simpler and often more robust for local dev servers
+            const result = await FileSystem.downloadAsync(DLC_ENDPOINT, fileUri);
+
+            if (result.status !== 200) {
+                throw new Error(`Download failed with status ${result.status}`);
+            }
 
             if (!result || !result.uri) {
                 throw new Error("Download failed");

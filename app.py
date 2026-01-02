@@ -465,14 +465,23 @@ def download_dlc_puzzles():
         return jsonify({"error": "DLC file not found"}), 404
         
     try:
-        from flask import send_file
-        return send_file(
-            DLC_PATH, 
-            as_attachment=True, 
+        from flask import send_from_directory
+        file_size = os.path.getsize(DLC_PATH)
+        print(f"Sending DLC File. Path: {DLC_PATH}, Size: {file_size} bytes")
+        
+        directory = os.path.dirname(DLC_PATH)
+        filename = os.path.basename(DLC_PATH)
+        response = send_from_directory(
+            directory,
+            filename,
+            as_attachment=True,
             download_name='puzzles_expansion_v1.sqlite',
             mimetype='application/x-sqlite3'
         )
+        response.headers['Connection'] = 'close'
+        return response
     except Exception as e:
+        print(f"DLC Error: {e}")
         return jsonify({"error": str(e)}), 500
 
 # --- ENTRY POINT ---
@@ -493,4 +502,5 @@ if __name__ == '__main__':
     if os.path.exists(DLC_PATH):
         print(f"DLC Pack available: {DLC_PATH}")
         print(f"DLC Endpoint: /api/dlc/puzzles_v1")
-    app.run(debug=True, port=5000)
+    # debug=False is safer for file streaming stability
+    app.run(debug=False, port=5000, threaded=True)

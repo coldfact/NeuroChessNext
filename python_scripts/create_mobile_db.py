@@ -8,7 +8,7 @@ import random
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE_DB = os.path.join(BASE_DIR, "lichess_short_puzzles.sqlite")
 DEST_DB_BASE = os.path.join(BASE_DIR, "lichess_mobile_puzzles.sqlite")
-DEST_DB_EXTRA = os.path.join(BASE_DIR, "lichess_mobile_puzzles_extra.sqlite")
+DEST_DB_EXTRA = os.path.join(BASE_DIR, "mobile_puzzles_extra.sqlite")
 
 BASE_PER_BAND = 1000
 EXTRA_PER_BAND = 9000
