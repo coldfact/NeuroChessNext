@@ -1,16 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, ActivityIndicator, Alert, Platform } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
-import { ChevronLeft, Brain, Layers, ShoppingBag, RefreshCw, Check, DownloadCloud } from 'lucide-react-native';
+import { ChevronLeft, Brain, Layers, ShoppingBag, RefreshCw, Check, DownloadCloud, Zap } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { DatabaseService } from '../src/services/database';
+import { AdService } from '../src/services/AdService';
 import { DLC_ENDPOINT } from '../src/config';
 
 export default function StoreScreen() {
     const router = useRouter();
     const [hasExpansion, setHasExpansion] = useState(false);
     const [hasNBackPremium, setHasNBackPremium] = useState(false);
+    const [hasRemoveAds, setHasRemoveAds] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [downloadProgress, setDownloadProgress] = useState(0);
 
@@ -21,20 +23,24 @@ export default function StoreScreen() {
     const checkOwnership = async () => {
         try {
             const ownedExpansion = await AsyncStorage.getItem('dlc_puzzles_v1');
-            if (ownedExpansion === 'true') {
-                setHasExpansion(true);
-            }
+            if (ownedExpansion === 'true') setHasExpansion(true);
 
             const ownedNBack = await AsyncStorage.getItem('nback_premium_owned');
-            if (ownedNBack === 'true') {
-                setHasNBackPremium(true);
-            }
+            if (ownedNBack === 'true') setHasNBackPremium(true);
+
+            const ownedAds = await AsyncStorage.getItem('remove_ads_owned');
+            if (ownedAds === 'true') setHasRemoveAds(true);
+
+            // Also check implicit ownership (Bundle logic handled by AdService)
+            // But here we want to show specific badges. 
+            // If they bought the bundle, they own everything.
+            // For now, let's keep it simple key-based.
         } catch (e) { console.error(e); }
     };
 
     const handlePurchase = async (item: string) => {
         if (Platform.OS === 'web') {
-            Alert.alert("Native Feature", "DLC Expansion requires a native device (iOS/Android) for database merging. It does not work in the browser.");
+            Alert.alert("Native Feature", "Store requires a native device.");
             return;
         }
 
@@ -42,25 +48,72 @@ export default function StoreScreen() {
             await processExpansionPurchase();
         } else if (item === 'nback_mastery') {
             await processNBackPurchase();
+        } else if (item === 'remove_ads') {
+            await processRemoveAdsPurchase();
+        } else if (item === 'bundle_all') {
+            await processBundlePurchase();
         } else {
             Alert.alert("Coming Soon", "This item is not yet available.");
         }
     };
 
-    const processNBackPurchase = async () => {
+    const processRemoveAdsPurchase = async () => {
         Alert.alert(
             "Confirm Purchase",
-            "Unlock N-Back Mastery (Levels 2-9) for $1.99?",
+            "Remove All Ads for $2.99?\n(Note: Purchasing ANY other item also removes ads!)",
             [
                 { text: "Cancel", style: "cancel" },
                 {
                     text: "Buy",
                     onPress: async () => {
-                        // Simulate API call
+                        await new Promise(r => setTimeout(r, 1000));
+                        await AdService.purchaseRemoveAds();
+                        setHasRemoveAds(true);
+                        Alert.alert("Success", "Ads removed forever!");
+                    }
+                }
+            ]
+        );
+    };
+
+    const processBundlePurchase = async () => {
+        Alert.alert(
+            "Confirm Purchase",
+            "Get Full Suite Upgrade for $3.99?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Buy",
+                    onPress: async () => {
+                        await new Promise(r => setTimeout(r, 1000));
+                        // Unlock everything
+                        await AsyncStorage.setItem('nback_premium_owned', 'true');
+                        await AdService.purchaseRemoveAds();
+                        setHasNBackPremium(true);
+                        setHasRemoveAds(true);
+
+                        // Start download for puzzles
+                        setIsDownloading(true);
+                        await downloadAndInstallDLC();
+                    }
+                }
+            ]
+        );
+    };
+
+    const processNBackPurchase = async () => {
+        Alert.alert(
+            "Confirm Purchase",
+            "Unlock N-Back Mastery (Levels 2-9) for $1.99?\n(Also removes ads!)",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Buy",
+                    onPress: async () => {
                         await new Promise(r => setTimeout(r, 1000));
                         await AsyncStorage.setItem('nback_premium_owned', 'true');
                         setHasNBackPremium(true);
-                        Alert.alert("Success", "N-Back Mastery unlocked! You can now access all depth levels.");
+                        Alert.alert("Success", "N-Back Mastery unlocked! Ads removed.");
                     }
                 }
             ]
@@ -68,10 +121,9 @@ export default function StoreScreen() {
     };
 
     const processExpansionPurchase = async () => {
-        // 1. Simulate Payment
         Alert.alert(
             "Confirm Purchase",
-            "Get Expansion Pack for $2.99?",
+            "Get Expansion Pack for $2.99?\n(Also removes ads!)",
             [
                 { text: "Cancel", style: "cancel" },
                 {
@@ -89,44 +141,28 @@ export default function StoreScreen() {
         try {
             const fileUri = FileSystem.cacheDirectory + 'puzzles_expansion.sqlite';
 
-            // 2. Download
-            // Switch to downloadAsync for stability on Emulator
             console.log(`Downloading DLC from ${DLC_ENDPOINT}...`);
-
-            // downloadAsync is simpler and often more robust for local dev servers
             const result = await FileSystem.downloadAsync(DLC_ENDPOINT, fileUri);
 
-            if (result.status !== 200) {
-                throw new Error(`Download failed with status ${result.status}`);
-            }
-
-            if (!result || !result.uri) {
-                throw new Error("Download failed");
-            }
+            if (result.status !== 200) throw new Error(`Download failed with status ${result.status}`);
+            if (!result || !result.uri) throw new Error("Download failed");
 
             console.log('Download complete:', result.uri);
             setDownloadProgress(1); // 100%
-
-            // 3. Install / Merge
-            // Give UI a moment to show 100%
             await new Promise(r => setTimeout(r, 500));
 
             console.log('Merging DLC...');
-            // Need to expose a text state for "Importing..." if we want, currently just stuck at 100%
-
-            // Call Database Service
             await DatabaseService.mergeDLC(result.uri);
 
-            // 4. Cleanup & Persist
             await FileSystem.deleteAsync(result.uri, { idempotent: true });
             await AsyncStorage.setItem('dlc_puzzles_v1', 'true');
             setHasExpansion(true);
 
-            Alert.alert("Success!", "Expansion Pack installed. +63,000 puzzles added to your library.");
+            Alert.alert("Success!", "Expansion Pack installed. Ads removed.");
 
         } catch (e: any) {
             console.error("DLC Install Error:", e);
-            Alert.alert("Error", "Failed to download or install expansion pack.\n" + e.message);
+            Alert.alert("Error", "Failed to download expansion pack.\n" + e.message);
         } finally {
             setIsDownloading(false);
             setDownloadProgress(0);
@@ -137,6 +173,7 @@ export default function StoreScreen() {
         // Mock restore
         const owned = await AsyncStorage.getItem('dlc_puzzles_v1');
         const ownedNBack = await AsyncStorage.getItem('nback_premium_owned');
+        const ownedAds = await AsyncStorage.getItem('remove_ads_owned');
 
         let restored = false;
 
@@ -146,6 +183,10 @@ export default function StoreScreen() {
         }
         if (ownedNBack === 'true') {
             setHasNBackPremium(true);
+            restored = true;
+        }
+        if (ownedAds === 'true') {
+            setHasRemoveAds(true);
             restored = true;
         }
 
@@ -172,10 +213,40 @@ export default function StoreScreen() {
             <ScrollView contentContainerStyle={styles.content}>
 
                 {/* Intro */}
-                <Text style={styles.sectionTitle}>Upgrades & Extensions</Text>
-                <Text style={styles.subtitle}>Enhance your training with the full suite of NeuroChess tools.</Text>
+                <Text style={styles.sectionTitle}>Store</Text>
+
+                {/* [NEW] Remove Ads - Top Item */}
+                <View style={styles.card}>
+                    <View style={styles.cardHeader}>
+                        <Zap color="#f1c40f" size={24} />
+                        <Text style={styles.cardTitle}>Remove All Ads</Text>
+                    </View>
+                    <Text style={styles.cardDesc}>
+                        Remove all advertisements from NeuroChess.
+                        Note: Purchasing ANY premium item below will ALSO remove ads automatically!
+                    </Text>
+
+                    <View style={styles.itemRow}>
+                        <View style={styles.itemInfo}>
+                            <Text style={styles.itemTitle}>Ad-Free Experience</Text>
+                            <Text style={styles.itemMeta}>Permanent Unlock</Text>
+                        </View>
+
+                        {hasRemoveAds || hasExpansion || hasNBackPremium ? (
+                            <View style={styles.ownedBadge}>
+                                <Check color="#fff" size={16} />
+                                <Text style={styles.ownedText}>Owned</Text>
+                            </View>
+                        ) : (
+                            <Pressable style={styles.buyBtn} onPress={() => handlePurchase('remove_ads')}>
+                                <Text style={styles.buyBtnText}>$2.99</Text>
+                            </Pressable>
+                        )}
+                    </View>
+                </View>
 
                 {/* Section: Logic / Puzzles */}
+                <Text style={styles.sectionTitle}>Upgrades</Text>
                 <View style={styles.card}>
                     <View style={styles.cardHeader}>
                         <Brain color="#3498db" size={24} />
@@ -189,7 +260,7 @@ export default function StoreScreen() {
                         <View style={styles.itemInfo}>
                             <Text style={styles.itemTitle}>Expansion Pack</Text>
                             <Text style={styles.itemMeta}>+9,000 puzzles / band</Text>
-                            <Text style={styles.itemSub}>Total 10,000 puzzles per rating band.</Text>
+                            <Text style={styles.itemSub}>Includes Ad Removal.</Text>
                         </View>
 
                         {hasExpansion ? (
@@ -226,7 +297,7 @@ export default function StoreScreen() {
                         <View style={styles.itemInfo}>
                             <Text style={styles.itemTitle}>Unlock Mastery</Text>
                             <Text style={styles.itemMeta}>Up to Depth 9</Text>
-                            <Text style={styles.itemSub}>Current limit: 1 deep.</Text>
+                            <Text style={styles.itemSub}>Includes Ad Removal.</Text>
                         </View>
 
                         {hasNBackPremium ? (
@@ -256,7 +327,7 @@ export default function StoreScreen() {
                         <View style={styles.itemInfo}>
                             <Text style={styles.itemTitle}>Upgrade All</Text>
                             <Text style={styles.itemMeta}>Includes all features</Text>
-                            <Text style={styles.itemSub}>Puzzles Expansion + N-back Mastery + Future unlocks.</Text>
+                            <Text style={styles.itemSub}>Puzzles Expansion + N-back Mastery + Ads Removed.</Text>
                         </View>
                         <Pressable style={styles.buyBtn} onPress={() => handlePurchase('bundle_all')}>
                             <Text style={styles.buyBtnText}>$3.99</Text>
@@ -322,7 +393,7 @@ const styles = StyleSheet.create({
     },
     bundleCard: {
         borderColor: '#f1c40f',
-        backgroundColor: '#1e1e1e', // Maybe slight tint? keeping consistent for now
+        backgroundColor: '#1e1e1e',
     },
     cardHeader: {
         flexDirection: 'row',

@@ -12,6 +12,8 @@ import NBackSettingsModal from '../../src/components/nback/NBackSettingsModal';
 import LevelSelectorModal from '../../src/components/nback/LevelSelectorModal';
 import DurationSelectorModal from '../../src/components/nback/DurationSelectorModal';
 import RankInfoModal from '../../src/components/nback/RankInfoModal';
+import AdPlaceholderModal from '../../src/components/shared/AdPlaceholderModal';
+import { AdService } from '../../src/services/AdService';
 
 import { useNBackGame } from '../../src/hooks/useNBackGame';
 import { NBACK_RANKS, RANK_COLORS } from '../../src/constants';
@@ -263,6 +265,16 @@ export default function NBackGameScreen() {
             <RankInfoModal
                 visible={showRankInfo}
                 onClose={() => setShowRankInfo(false)}
+            />
+
+            <AdPlaceholderModal
+                visible={game.state.showAd}
+                onClose={game.closeAd}
+                onRemoveAds={async () => {
+                    await AdService.purchaseRemoveAds();
+                    game.closeAd();
+                    alert("Thank you! Ads have been removed.");
+                }}
             />
 
         </SafeAreaView >

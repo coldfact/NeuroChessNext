@@ -14,6 +14,8 @@ import { usePuzzleGame } from '../../src/hooks/usePuzzleGame';
 import { BoardTheme, BOARD_THEMES, PieceSet, PIECE_SETS } from '../../src/constants';
 import ThemeSelectorModal, { Theme } from '../../src/components/ThemeSelectorModal';
 import { Target } from 'lucide-react-native';
+import { AdService } from '../../src/services/AdService';
+import AdPlaceholderModal from '../../src/components/shared/AdPlaceholderModal';
 
 export default function GameScreen() {
     const router = useRouter();
@@ -33,6 +35,10 @@ export default function GameScreen() {
     const [bandSelectorVisible, setBandSelectorVisible] = useState(false);
     const [themeSelectorVisible, setThemeSelectorVisible] = useState(false);
     const [debugPuzzleId, setDebugPuzzleId] = useState<string | null>(null); // For debugging specific puzzles via URL
+
+    // Ad State
+    const [showAd, setShowAd] = useState(false);
+    const [adShownForCurrentPuzzle, setAdShownForCurrentPuzzle] = useState(false);
 
     // Load Settings
     useEffect(() => {
@@ -105,10 +111,11 @@ export default function GameScreen() {
     };
 
 
-    // Reset pieces visibility on new puzzle
+    // Reset pieces visibility AND Ad Flag on new puzzle
     useEffect(() => {
         if (game.puzzleId) {
             setPiecesHidden(false);
+            setAdShownForCurrentPuzzle(false);
             // Verify if we should start blindfold immediately
             // This prevents the "0" state flicker for the Peek button
             if (game.mode === 'blindfold') {
@@ -147,13 +154,22 @@ export default function GameScreen() {
     }, [game.mode, game.status.message, piecesHidden, blindfoldTime, game.isLoading]);
 
 
-    // Reveal pieces when puzzle is solved or given up
+    // Reveal pieces when puzzle is solved or given up AND Trigger Ads
     useEffect(() => {
         if (game.status.message === 'Solved!' || game.status.message === 'Solution Revealed') {
             setPiecesHidden(false);
             setBlindfoldCountdown(0);
+
+            // Check for Ads
+            if (!adShownForCurrentPuzzle) {
+                setAdShownForCurrentPuzzle(true);
+                (async () => {
+                    const shouldShow = await AdService.incrementGameCount();
+                    if (shouldShow) setShowAd(true);
+                })();
+            }
         }
-    }, [game.status.message]);
+    }, [game.status.message, adShownForCurrentPuzzle]);
 
     // Band change handler (now from modal)
     const handleBandChange = (newBand: string) => {
@@ -385,6 +401,16 @@ export default function GameScreen() {
                 onClose={() => setThemeSelectorVisible(false)}
                 currentTheme={theme}
                 onSelectTheme={handleThemeChange}
+            />
+
+            <AdPlaceholderModal
+                visible={showAd}
+                onClose={() => setShowAd(false)}
+                onRemoveAds={async () => {
+                    await AdService.purchaseRemoveAds();
+                    setShowAd(false);
+                    alert("Thank you! Ads have been removed.");
+                }}
             />
         </SafeAreaView >
     );

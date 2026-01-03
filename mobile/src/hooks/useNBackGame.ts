@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DatabaseService } from '../services/database';
+import { AdService } from '../services/AdService';
 import { PieceSet, BoardTheme, BOARD_THEMES, NBACK_RANKS } from '../constants';
 
 export type PieceType = 'p' | 'n' | 'b' | 'r' | 'q' | 'k';
@@ -59,6 +60,7 @@ export interface NBackState {
     initialBests: { maxAccuracy: number; maxStreak: number } | null;
     activeGameStartTime: number | null;
     rankAchieved: string | null;
+    showAd: boolean;
 }
 
 const DEFAULT_STATE: NBackState = {
@@ -80,7 +82,8 @@ const DEFAULT_STATE: NBackState = {
     currentSelection: null,
     initialBests: null,
     activeGameStartTime: null,
-    rankAchieved: null
+    rankAchieved: null,
+    showAd: false
 };
 
 export interface NBackGame {
@@ -88,7 +91,7 @@ export interface NBackGame {
     config: NBackConfig;
     startGame: () => void;
     updateConfig: (newConfig: Partial<NBackConfig>) => void;
-    resetData: () => void;
+    resetData: (hardReset?: boolean) => void;
     upgradeToPremium: () => void;
     cancelGame: () => void;
     submitAnswer: (matchType: MatchType) => void;
@@ -98,6 +101,7 @@ export interface NBackGame {
     isGhostGame: boolean;
     rankAchieved: string | null;
     globalRank: number;
+    closeAd: () => void;
 }
 
 const STORAGE_KEY = 'nback_settings';
@@ -216,7 +220,8 @@ export function useNBackGame(): NBackGame {
             timeLeft: configRef.current.memorizeTime,
             initialBests: bests,
             activeGameStartTime: null,
-            rankAchieved: null
+            rankAchieved: null,
+            showAd: false
         });
 
         setTimeout(() => {
@@ -253,17 +258,27 @@ export function useNBackGame(): NBackGame {
         updateConfig({ isPremium: true });
     }, [updateConfig]);
 
-    const resetData = useCallback(async () => {
+    const resetData = useCallback(async (hardReset = false) => {
         try {
             const isPremium = await AsyncStorage.getItem('nback_premium_owned') === 'true';
             await AsyncStorage.removeItem(STORAGE_KEY);
-            // Preserve nback_premium_owned
-            setConfig({ ...DEFAULT_CONFIG, isPremium });
             await AsyncStorage.removeItem('nback_high_scores');
             await DatabaseService.clearNBackData(); // Clear DB History
+
+            if (hardReset) {
+                await AsyncStorage.removeItem('nback_premium_owned');
+                await AsyncStorage.removeItem('remove_ads_owned');
+                await AsyncStorage.removeItem('ad_game_count');
+                setConfig({ ...DEFAULT_CONFIG, isPremium: false });
+                console.log('HARD RESET: All data and purchases cleared.');
+            } else {
+                // Preserve nback_premium_owned
+                setConfig({ ...DEFAULT_CONFIG, isPremium });
+                console.log('N-Back Data Reset (Premium Preserved)');
+            }
+
             setIsVerified(false); // Reset Verification
             setGlobalRank(0);
-            console.log('N-Back Data Reset (Premium Preserved)');
         } catch (e) { console.error('Error resetting data', e); }
     }, []);
 
@@ -513,6 +528,13 @@ export function useNBackGame(): NBackGame {
                 setState(prev => ({ ...prev, rankAchieved: NBACK_RANKS[c.n] }));
             }
         }
+
+        // Ad Logic
+        const shouldShowAd = await AdService.incrementGameCount();
+        if (shouldShowAd) {
+            setState(prev => ({ ...prev, showAd: true }));
+        }
+
     }, [hasUsedGhostMode, isVerified, globalRank]); // Add dependency for cleanup logic safety if used
 
     const exitGame = useCallback(() => {
@@ -538,6 +560,8 @@ export function useNBackGame(): NBackGame {
         }));
     }, []);
 
+    const closeAd = useCallback(() => setState(prev => ({ ...prev, showAd: false })), []);
+
     return {
         state,
         config,
@@ -552,6 +576,7 @@ export function useNBackGame(): NBackGame {
         initialBests: state.initialBests,
         isGhostGame: hasUsedGhostMode || config.ghostMode,
         rankAchieved: state.rankAchieved,
-        globalRank
+        globalRank,
+        closeAd
     };
 }

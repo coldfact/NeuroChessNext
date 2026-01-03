@@ -16,7 +16,7 @@ interface NBackSettingsModalProps {
     onSetPieceSet: (set: PieceSet) => void;
     boardTheme: BoardTheme;
     onSetBoardTheme: (theme: BoardTheme) => void;
-    onResetData: () => void;
+    onResetData: (hardReset?: boolean) => void;
 }
 
 export default function NBackSettingsModal({
@@ -169,6 +169,20 @@ export default function NBackSettingsModal({
                         </Pressable>
                         <Text style={styles.resetNote}>Clears high scores and history only for this game mode.</Text>
 
+                        {/* Hard Reset for Dev/Testing */}
+                        <Pressable style={[styles.resetButton, { backgroundColor: '#7f8c8d', marginTop: 20 }]} onPress={() => {
+                            Alert.alert(
+                                "Hard Reset (Dev)",
+                                "Wipe EVERYTHING? Includes Purchases, Rank, and Settings.",
+                                [
+                                    { text: "Cancel", style: "cancel" },
+                                    { text: "NUKE IT ☢️", style: "destructive", onPress: () => { onResetData(true); onClose(); } }
+                                ]
+                            );
+                        }}>
+                            <RefreshCcw color="#fff" size={18} />
+                            <Text style={styles.resetText}>Hard Reset (Clear Purchases)</Text>
+                        </Pressable>
                         <View style={{ height: 40 }} />
                     </ScrollView>
                 </View>

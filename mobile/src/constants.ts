@@ -59,4 +59,4 @@ export const RANK_COLORS: Record<number, string> = {
     9: '#FFD700'
 };
 
-export const PASS_THRESHOLD = 0;
+export const PASS_THRESHOLD = 80;

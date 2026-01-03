@@ -102,8 +102,8 @@ export const DatabaseService = {
         if (!this.db) await this.init();
         try {
             const result = await this.db!.getFirstAsync<{ count: number }>(
-                `SELECT COUNT(*) as count FROM nback_games WHERE level = ? AND game_time >= 1 AND percentage >= ? AND ghost = 0 AND bias >= 40 AND bias <= 60`,
-                [level, 0] // Set to 0 for testing (was 80)
+                `SELECT COUNT(*) as count FROM nback_games WHERE level = ? AND game_time = 20 AND percentage >= ? AND ghost = 0 AND bias >= 40 AND bias <= 60`,
+                [level, 80] // Set to 80 for production
             );
             return (result?.count ?? 0) > 0;
         } catch (e) {
