@@ -36,3 +36,6 @@ coverage/
 # Build Artifacts
 android/
 ios/
+
+# misc folders
+prototype_nback/
