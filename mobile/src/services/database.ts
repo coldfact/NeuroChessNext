@@ -6,54 +6,212 @@ const DB_NAME = 'neurochess.db';
 
 export const DatabaseService = {
     db: null as SQLite.SQLiteDatabase | null,
+    _initPromise: null as Promise<void> | null,
 
     async init() {
-        // 1. Ensure database exists in writable directory
-        const dbPath = `${FileSystem.documentDirectory}SQLite/${DB_NAME}`;
-        const dirInfo = await FileSystem.getInfoAsync(`${FileSystem.documentDirectory}SQLite`);
+        if (this._initPromise) return this._initPromise;
 
-        if (!dirInfo.exists) {
-            await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}SQLite`);
+        this._initPromise = (async () => {
+            // 1. Ensure database exists in writable directory
+            const dbPath = `${FileSystem.documentDirectory}SQLite/${DB_NAME}`;
+            const dirInfo = await FileSystem.getInfoAsync(`${FileSystem.documentDirectory}SQLite`);
+
+            if (!dirInfo.exists) {
+                await FileSystem.makeDirectoryAsync(`${FileSystem.documentDirectory}SQLite`);
+            }
+
+            const fileInfo = await FileSystem.getInfoAsync(dbPath);
+            if (!fileInfo.exists) {
+                console.log("Initialize: Copying bundled database...");
+                const asset = Asset.fromModule(require('../../assets/neurochess.db'));
+                await asset.downloadAsync();
+                await FileSystem.copyAsync({
+                    from: asset.localUri || asset.uri,
+                    to: dbPath,
+                });
+            }
+
+            // 2. Open Database
+            this.db = await SQLite.openDatabaseAsync(DB_NAME);
+
+            // 3. Ensure User Tables (if missing from bundle)
+            try {
+                await this.db.execAsync(`
+              CREATE TABLE IF NOT EXISTS user_progress (
+                puzzle_id TEXT PRIMARY KEY,
+                status TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+              );
+              CREATE INDEX IF NOT EXISTS idx_user_status ON user_progress(status);
+              
+              CREATE TABLE IF NOT EXISTS user_favorites (
+                puzzle_id TEXT PRIMARY KEY,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+              );
+              
+              CREATE TABLE IF NOT EXISTS player_stats (
+                mode TEXT PRIMARY KEY,
+                rating REAL,
+                rd REAL,
+                vol REAL,
+                last_active DATETIME DEFAULT CURRENT_TIMESTAMP
+              );
+        
+              CREATE TABLE IF NOT EXISTS nback_games (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                level INTEGER,
+                game_time INTEGER, -- minutes
+                move_time INTEGER, -- seconds
+                bias INTEGER,
+                rounds INTEGER,
+                MAX_STREAK INTEGER,
+                score INTEGER,
+                possible_score INTEGER,
+                percentage REAL,
+                ghost INTEGER DEFAULT 0
+              );
+              CREATE INDEX IF NOT EXISTS idx_nback_stats ON nback_games(level, game_time, ghost, percentage DESC);
+            `);
+
+                // Migration for existing tables
+                await this.db.runAsync('ALTER TABLE nback_games ADD COLUMN ghost INTEGER DEFAULT 0').catch(() => { });
+
+                // N-Back Persistent Stats
+                await this.db.execAsync(`
+                    CREATE TABLE IF NOT EXISTS nback_stats (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        max_rank_level INTEGER DEFAULT 0
+                    );
+                    INSERT OR IGNORE INTO nback_stats (id, max_rank_level) VALUES (1, 0);
+                `);
+
+            } catch (e) {
+                console.error("Schema creation/check failed", e);
+            }
+
+            console.log("Database initialized.");
+        })();
+
+        return this._initPromise;
+    },
+
+    // ... existing methods ...
+
+    async checkRankVerified(level: number) {
+        if (!this.db) await this.init();
+        try {
+            const result = await this.db!.getFirstAsync<{ count: number }>(
+                `SELECT COUNT(*) as count FROM nback_games WHERE level = ? AND game_time >= 1 AND percentage >= ? AND ghost = 0 AND bias >= 40 AND bias <= 60`,
+                [level, 0] // Set to 0 for testing (was 80)
+            );
+            return (result?.count ?? 0) > 0;
+        } catch (e) {
+            console.error("Failed to check rank verification:", e);
+            return false;
         }
+    },
 
-        const fileInfo = await FileSystem.getInfoAsync(dbPath);
-        if (!fileInfo.exists) {
-            console.log("Initialize: Copying bundled database...");
-            const asset = Asset.fromModule(require('../../assets/neurochess.db'));
-            await asset.downloadAsync();
-            await FileSystem.copyAsync({
-                from: asset.localUri || asset.uri,
-                to: dbPath,
-            });
+    async getHighestRankVerified() {
+        if (!this.db) await this.init();
+        try {
+            const result = await this.db!.getFirstAsync<{ max_rank_level: number }>(
+                `SELECT max_rank_level FROM nback_stats WHERE id = 1`
+            );
+            return result?.max_rank_level || 0;
+        } catch (e) {
+            console.error("Failed to get highest rank:", e);
+            return 0;
         }
+    },
 
-        // 2. Open Database
-        this.db = await SQLite.openDatabaseAsync(DB_NAME);
+    async updateHighestRank(level: number) {
+        if (!this.db) await this.init();
+        try {
+            await this.db!.runAsync(
+                `UPDATE nback_stats SET max_rank_level = ? WHERE id = 1`,
+                [level]
+            );
+        } catch (e) {
+            console.error("Failed to update highest rank:", e);
+        }
+    },
 
-        // 3. Ensure User Tables (if missing from bundle)
-        await this.db.execAsync(`
-      CREATE TABLE IF NOT EXISTS user_progress (
-        puzzle_id TEXT PRIMARY KEY,
-        status TEXT,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-      CREATE INDEX IF NOT EXISTS idx_user_status ON user_progress(status);
-      
-      CREATE TABLE IF NOT EXISTS user_favorites (
-        puzzle_id TEXT PRIMARY KEY,
-        timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-      
-      CREATE TABLE IF NOT EXISTS player_stats (
-        mode TEXT PRIMARY KEY,
-        rating REAL,
-        rd REAL,
-        vol REAL,
-        last_active DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
+    async insertNBackGame(data: {
+        level: number;
+        game_time: number;
+        move_time: number;
+        bias: number;
+        rounds: number;
+        max_streak: number;
+        score: number;
+        possible_score: number;
+        percentage: number;
+        ghost: boolean;
+    }) {
+        if (!this.db) await this.init();
+        try {
+            await this.db!.runAsync(
+                `INSERT INTO nback_games (level, game_time, move_time, bias, rounds, max_streak, score, possible_score, percentage, ghost) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    data.level,
+                    data.game_time,
+                    data.move_time,
+                    data.bias,
+                    data.rounds,
+                    data.max_streak,
+                    data.score,
+                    data.possible_score,
+                    data.percentage,
+                    data.ghost ? 1 : 0
+                ]
+            );
+            console.log("N-Back game saved.");
+        } catch (e) {
+            console.error("Failed to save N-Back game:", e);
+        }
+    },
 
-        console.log("Database initialized.");
+    async clearNBackData() {
+        if (!this.db) await this.init();
+        try {
+            await this.db!.runAsync('DELETE FROM nback_games');
+            await this.db!.runAsync('UPDATE nback_stats SET max_rank_level = 0 WHERE id = 1');
+            console.log("N-Back history and rank cleared.");
+        } catch (e) {
+            console.error("Failed to clear N-Back history:", e);
+        }
+    },
+
+    async getNBackBests(level: number, game_time: number) {
+        if (!this.db) await this.init();
+        try {
+            // Best Accuracy (Tie-break: possible_score desc (more rounds better), then max_streak)
+            // ghost = 0 (Standard only)
+            const accResult = await this.db!.getFirstAsync<{ percentage: number; possible_score: number }>(`
+                SELECT percentage, possible_score FROM nback_games 
+                WHERE level = ? AND game_time = ? AND ghost = 0
+                ORDER BY percentage DESC, possible_score DESC 
+                LIMIT 1
+            `, [level, game_time]);
+
+            // Best Streak
+            const streakResult = await this.db!.getFirstAsync<{ max_streak: number }>(`
+                SELECT max_streak FROM nback_games 
+                WHERE level = ? AND game_time = ? AND ghost = 0
+                ORDER BY max_streak DESC, percentage DESC
+                LIMIT 1
+            `, [level, game_time]);
+
+            return {
+                maxAccuracy: accResult?.percentage ?? 0,
+                maxStreak: streakResult?.max_streak ?? 0
+            };
+        } catch (e) {
+            console.error("Failed to fetch N-Back bests:", e);
+            return { maxAccuracy: 0, maxStreak: 0 };
+        }
     },
 
     async getCountsByBand() {

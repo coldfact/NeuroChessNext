@@ -32,16 +32,19 @@ export default function Launcher() {
                     </View>
                 </Pressable>
 
-                {/* Future Feature: N-Back */}
-                <View style={[styles.card, styles.cardDisabled]}>
+                {/* Feature: N-Back */}
+                <Pressable
+                    style={[styles.card]}
+                    onPress={() => router.push('/nback')}
+                >
                     <View style={styles.iconContainer}>
-                        <Grid3X3 color="#555" size={32} />
+                        <Grid3X3 color="#2ecc71" size={32} />
                     </View>
                     <View style={styles.cardContent}>
-                        <Text style={[styles.cardTitle, { color: '#555' }]}>N-Back</Text>
-                        <Text style={styles.cardDesc}>Memory Mastery (Coming Soon)</Text>
+                        <Text style={[styles.cardTitle, { color: '#2ecc71' }]}>N-Back</Text>
+                        <Text style={styles.cardDesc}>Memory Mastery</Text>
                     </View>
-                </View>
+                </Pressable>
 
                 {/* Future Feature: Deep */}
                 <View style={[styles.card, styles.cardDisabled]}>

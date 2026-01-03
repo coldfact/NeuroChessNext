@@ -34,3 +34,29 @@ export const BOARD_THEMES: BoardTheme[] = [
 
 export const PIECE_SETS = ['cburnett', 'merida', 'fresca'] as const;
 export type PieceSet = typeof PIECE_SETS[number];
+
+export const NBACK_RANKS: Record<number, string> = {
+    1: 'Beginner',
+    2: 'Amateur',
+    3: 'Intermediate',
+    4: 'Advanced',
+    5: 'Expert',
+    6: 'Master',
+    7: 'IM',
+    8: 'GM',
+    9: 'Super GM'
+};
+
+export const RANK_COLORS: Record<number, string> = {
+    1: '#CD7F32', // Bronze
+    2: '#CD7F32',
+    3: '#CD7F32',
+    4: '#A0AEC0', // Silver
+    5: '#A0AEC0',
+    6: '#A0AEC0',
+    7: '#FFD700', // Gold
+    8: '#FFD700',
+    9: '#FFD700'
+};
+
+export const PASS_THRESHOLD = 0;

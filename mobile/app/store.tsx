@@ -10,6 +10,7 @@ import { DLC_ENDPOINT } from '../src/config';
 export default function StoreScreen() {
     const router = useRouter();
     const [hasExpansion, setHasExpansion] = useState(false);
+    const [hasNBackPremium, setHasNBackPremium] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [downloadProgress, setDownloadProgress] = useState(0);
 
@@ -18,10 +19,17 @@ export default function StoreScreen() {
     }, []);
 
     const checkOwnership = async () => {
-        const owned = await AsyncStorage.getItem('dlc_puzzles_v1');
-        if (owned === 'true') {
-            setHasExpansion(true);
-        }
+        try {
+            const ownedExpansion = await AsyncStorage.getItem('dlc_puzzles_v1');
+            if (ownedExpansion === 'true') {
+                setHasExpansion(true);
+            }
+
+            const ownedNBack = await AsyncStorage.getItem('nback_premium_owned');
+            if (ownedNBack === 'true') {
+                setHasNBackPremium(true);
+            }
+        } catch (e) { console.error(e); }
     };
 
     const handlePurchase = async (item: string) => {
@@ -32,9 +40,31 @@ export default function StoreScreen() {
 
         if (item === 'puzzles_expansion') {
             await processExpansionPurchase();
+        } else if (item === 'nback_mastery') {
+            await processNBackPurchase();
         } else {
             Alert.alert("Coming Soon", "This item is not yet available.");
         }
+    };
+
+    const processNBackPurchase = async () => {
+        Alert.alert(
+            "Confirm Purchase",
+            "Unlock N-Back Mastery (Levels 2-9) for $1.99?",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Buy",
+                    onPress: async () => {
+                        // Simulate API call
+                        await new Promise(r => setTimeout(r, 1000));
+                        await AsyncStorage.setItem('nback_premium_owned', 'true');
+                        setHasNBackPremium(true);
+                        Alert.alert("Success", "N-Back Mastery unlocked! You can now access all depth levels.");
+                    }
+                }
+            ]
+        );
     };
 
     const processExpansionPurchase = async () => {
@@ -106,8 +136,20 @@ export default function StoreScreen() {
     const handleRestore = async () => {
         // Mock restore
         const owned = await AsyncStorage.getItem('dlc_puzzles_v1');
+        const ownedNBack = await AsyncStorage.getItem('nback_premium_owned');
+
+        let restored = false;
+
         if (owned === 'true') {
             setHasExpansion(true);
+            restored = true;
+        }
+        if (ownedNBack === 'true') {
+            setHasNBackPremium(true);
+            restored = true;
+        }
+
+        if (restored) {
             Alert.alert("Restore", "Purchases restored.");
         } else {
             Alert.alert("Restore", "No previous purchases found.");
@@ -186,9 +228,17 @@ export default function StoreScreen() {
                             <Text style={styles.itemMeta}>Up to Depth 9</Text>
                             <Text style={styles.itemSub}>Current limit: 1 deep.</Text>
                         </View>
-                        <Pressable style={styles.buyBtn} onPress={() => handlePurchase('nback_mastery')}>
-                            <Text style={styles.buyBtnText}>$1.99</Text>
-                        </Pressable>
+
+                        {hasNBackPremium ? (
+                            <View style={styles.ownedBadge}>
+                                <Check color="#fff" size={16} />
+                                <Text style={styles.ownedText}>Owned</Text>
+                            </View>
+                        ) : (
+                            <Pressable style={styles.buyBtn} onPress={() => handlePurchase('nback_mastery')}>
+                                <Text style={styles.buyBtnText}>$1.99</Text>
+                            </Pressable>
+                        )}
                     </View>
                 </View>
 
