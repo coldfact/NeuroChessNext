@@ -1,80 +1,127 @@
-import React from 'react';
-import { StyleSheet, View, Text, Pressable, Image } from 'react-native';
-import { Link, useRouter } from 'expo-router';
+import { View, Text, StyleSheet, Pressable, ScrollView, Image, Alert } from 'react-native';
+import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Brain, Grid3X3, Trophy, ShoppingBag } from 'lucide-react-native';
+
+// Assets (New Diagrammatic White Icons)
+const PuzzlesIcon = require('../assets/icon_puzzles.png');
+const NBackIcon = require('../assets/icon_nback.png');
+const DeepIcon = require('../assets/icon_deep.png');
+const CombosIcon = require('../assets/icon_combos.png');
+const TutorialsIcon = require('../assets/icon_tutorials.png');
+const StoreIcon = require('../assets/icon_store.png');
 
 export default function Launcher() {
     const router = useRouter();
 
+    const handleCombos = () => {
+        Alert.alert("Coming Soon", "NeuroChess Combos is currently in development. Stay tuned!");
+    };
+
+    const handleTutorials = () => {
+        Alert.alert("Coming Soon", "Interactive tutorials and support guides will be available here.");
+    };
+
     return (
         <SafeAreaView style={styles.container}>
             <StatusBar style="light" />
+            <ScrollView contentContainerStyle={styles.scrollContent}>
 
-            <View style={styles.header}>
-                <Text style={styles.title}>NeuroChess</Text>
-                <Text style={styles.subtitle}>Train Your Brain</Text>
-            </View>
+                {/* Header - Centered */}
+                <View style={styles.header}>
+                    <Text style={styles.title}>NeuroChess</Text>
+                    <Text style={styles.subtitle}>TRAIN YOUR CHESS BRAIN</Text>
+                </View>
 
-            <View style={styles.grid}>
-                {/* Main Feature: Puzzles */}
+                {/* 1. PUZZLES */}
                 <Pressable
-                    style={[styles.card, styles.cardLarge]}
+                    style={[styles.card, { borderColor: '#4ECDC4' }]}
                     onPress={() => router.push('/puzzles')}
                 >
                     <View style={styles.iconContainer}>
-                        <Brain color="#f1c40f" size={40} />
+                        <Image source={PuzzlesIcon} style={styles.gameIcon} />
                     </View>
                     <View style={styles.cardContent}>
-                        <Text style={styles.cardTitle}>Puzzles</Text>
-                        <Text style={styles.cardDesc}>Pattern Recognition & Calculation</Text>
+                        <Text style={[styles.cardTitle, { color: '#4ECDC4' }]}>Puzzles</Text>
+                        <Text style={styles.cardDesc}>Short, blindfold-ready puzzles. Train focus, recall, and board vision.</Text>
                     </View>
                 </Pressable>
 
-                {/* Feature: N-Back */}
+                {/* 2. DEEP */}
                 <Pressable
-                    style={[styles.card]}
+                    style={[styles.card, { borderColor: '#f1c40f' }]}
+                    onPress={() => router.push('/deep')}
+                >
+                    <View style={styles.iconContainer}>
+                        <Image source={DeepIcon} style={styles.gameIcon} />
+                    </View>
+                    <View style={styles.cardContent}>
+                        <Text style={[styles.cardTitle, { color: '#f1c40f' }]}>Deep</Text>
+                        <Text style={styles.cardDesc}>Long calculation puzzles. Follow variations using arrows only.</Text>
+                    </View>
+                </Pressable>
+
+                {/* 3. N-BACK */}
+                <Pressable
+                    style={[styles.card, { borderColor: '#9b59b6' }]}
                     onPress={() => router.push('/nback')}
                 >
                     <View style={styles.iconContainer}>
-                        <Grid3X3 color="#2ecc71" size={32} />
+                        <Image source={NBackIcon} style={styles.gameIcon} />
                     </View>
                     <View style={styles.cardContent}>
-                        <Text style={[styles.cardTitle, { color: '#2ecc71' }]}>N-Back</Text>
-                        <Text style={styles.cardDesc}>Memory Mastery</Text>
+                        <Text style={[styles.cardTitle, { color: '#9b59b6' }]}>N-Back</Text>
+                        <Text style={styles.cardDesc}>The classic N-Back working memory game, rebuilt with chess pieces.</Text>
                     </View>
                 </Pressable>
 
-                {/* Future Feature: Deep */}
-                <View style={[styles.card, styles.cardDisabled]}>
-                    <View style={styles.iconContainer}>
-                        <Trophy color="#555" size={32} />
-                    </View>
-                    <View style={styles.cardContent}>
-                        <Text style={[styles.cardTitle, { color: '#555' }]}>Deep Calc</Text>
-                        <Text style={styles.cardDesc}>Visualization Training (Coming Soon)</Text>
-                    </View>
-                </View>
-
-                {/* DLC Store */}
+                {/* 4. COMBOS (Coming Soon) */}
                 <Pressable
-                    style={[styles.card, { marginTop: 20, borderColor: '#f39c12', borderWidth: 1 }]}
-                    onPress={() => router.push('/store')}
+                    style={[styles.card, { borderColor: '#e67e22', opacity: 0.8 }]}
+                    onPress={handleCombos}
                 >
                     <View style={styles.iconContainer}>
-                        <ShoppingBag color="#f39c12" size={32} />
+                        <Image source={CombosIcon} style={styles.gameIcon} />
                     </View>
                     <View style={styles.cardContent}>
-                        <Text style={[styles.cardTitle, { color: '#f39c12' }]}>Store</Text>
-                        <Text style={styles.cardDesc}>Get Expansion Packs</Text>
+                        <Text style={[styles.cardTitle, { color: '#e67e22' }]}>Combos</Text>
+                        <Text style={styles.cardDesc}>Decoder-style concentration training, reworked for chess. (Coming Soon)</Text>
                     </View>
                 </Pressable>
-            </View>
 
-            <View style={styles.footer}>
-                <Text style={styles.version}>v1.0.0 (Suite Edition)</Text>
-            </View>
+                {/* Spacer */}
+                <View style={{ height: 10 }} />
+
+                {/* SECONDARY ITEMS (Tutorials & Store) - Side-by-Side Compact */}
+                <View style={styles.secondaryRow}>
+
+                    {/* TUTORIALS & SUPPORT */}
+                    <Pressable
+                        style={[styles.miniCard, { borderColor: '#95a5a6' }]}
+                        onPress={handleTutorials}
+                    >
+                        <Image source={TutorialsIcon} style={styles.miniIcon} />
+                        <View style={styles.miniCardContent}>
+                            <Text style={[styles.miniCardTitle, { color: '#95a5a6' }]}>Tutorials</Text>
+                            <Text style={styles.miniCardDesc}>Guides & Help</Text>
+                        </View>
+                    </Pressable>
+
+                    {/* STORE */}
+                    <Pressable
+                        style={[styles.miniCard, { borderColor: '#2ecc71' }]}
+                        onPress={() => router.push('/store')}
+                    >
+                        <Image source={StoreIcon} style={styles.miniIcon} />
+                        <View style={styles.miniCardContent}>
+                            <Text style={[styles.miniCardTitle, { color: '#2ecc71' }]}>Store</Text>
+                            <Text style={styles.miniCardDesc}>Expansions</Text>
+                        </View>
+                    </Pressable>
+
+                </View>
+
+            </ScrollView>
         </SafeAreaView>
     );
 }
@@ -84,50 +131,54 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#111',
     },
-    header: {
-        paddingVertical: 40,
-        alignItems: 'center',
-    },
-    title: {
-        fontSize: 42,
-        fontWeight: '900',
-        color: '#fff',
-        letterSpacing: 2,
-    },
-    subtitle: {
-        fontSize: 16,
-        color: '#888',
-        marginTop: 5,
-        textTransform: 'uppercase',
-        letterSpacing: 3,
-    },
-    grid: {
+    scrollContent: {
         padding: 20,
         gap: 15,
+        paddingBottom: 40,
     },
+    header: {
+        marginBottom: 20,
+        marginTop: 10,
+        alignItems: 'center', // Centered
+    },
+    title: {
+        color: '#fff',
+        fontSize: 36,
+        fontWeight: 'bold',
+        letterSpacing: 1,
+    },
+    subtitle: {
+        color: '#888',
+        fontSize: 14,
+        letterSpacing: 3,
+        marginTop: 5,
+        textTransform: 'uppercase'
+    },
+
+    // Main Game Cards
     card: {
-        backgroundColor: '#222',
+        flexDirection: 'row',
+        backgroundColor: '#1a1a1a',
         borderRadius: 16,
         padding: 20,
-        flexDirection: 'row',
         alignItems: 'center',
         borderWidth: 1,
         borderColor: '#333',
-    },
-    cardLarge: {
-        backgroundColor: '#2a2a2a',
-        borderColor: '#444',
-        paddingVertical: 30,
-    },
-    cardDisabled: {
-        opacity: 0.6,
-        borderColor: '#222',
-        backgroundColor: '#1a1a1a',
+        minHeight: 110, // Ensure visual weight
     },
     iconContainer: {
-        width: 60,
-        alignItems: 'center',
-        justifyContent: 'center',
+        width: 65,
+        height: 65,
+        borderRadius: 12,
+        marginRight: 15,
+        overflow: 'hidden', // Clip the square image
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.1)'
+    },
+    gameIcon: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover', // Fill the container
     },
     cardContent: {
         flex: 1,
@@ -135,20 +186,49 @@ const styles = StyleSheet.create({
     cardTitle: {
         fontSize: 22,
         fontWeight: 'bold',
-        color: '#eee',
-        marginBottom: 4,
+        color: '#fff',
+        marginBottom: 6,
     },
     cardDesc: {
+        color: '#bbb',
         fontSize: 14,
-        color: '#888',
+        lineHeight: 20,
     },
-    footer: {
-        marginTop: 'auto',
+
+    // Secondary Items (Tutorials / Store)
+    secondaryRow: {
+        flexDirection: 'row',
+        gap: 12,
+    },
+    miniCard: {
+        flex: 1, // Equal width
+        flexDirection: 'row',
+        backgroundColor: '#151515',
+        borderRadius: 12,
+        padding: 12,
         alignItems: 'center',
-        padding: 20,
+        borderWidth: 1,
+        borderColor: '#333',
+        height: 70,
     },
-    version: {
-        color: '#444',
+    miniIcon: {
+        width: 32,
+        height: 32,
+        resizeMode: 'cover', // Fill the shape
+        borderRadius: 8,     // Rounded corners
+        marginRight: 10,
+    },
+    miniCardContent: {
+        flex: 1,
+    },
+    miniCardTitle: {
+        fontSize: 16,
+        fontWeight: 'bold',
+        color: '#fff',
+        marginBottom: 2,
+    },
+    miniCardDesc: {
+        color: '#888',
         fontSize: 12,
     }
 });
