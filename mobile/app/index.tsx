@@ -8,6 +8,7 @@ const PuzzlesIcon = require('../assets/icon_puzzles.png');
 const NBackIcon = require('../assets/icon_nback.png');
 const DeepIcon = require('../assets/icon_deep.png');
 const CombosIcon = require('../assets/icon_combos.png');
+const SequencesIcon = require('../assets/icon_sequences.png');
 const TutorialsIcon = require('../assets/icon_tutorials.png');
 const StoreIcon = require('../assets/icon_store.png');
 
@@ -61,7 +62,21 @@ export default function Launcher() {
                     </View>
                 </Pressable>
 
-                {/* 3. N-BACK */}
+                {/* 3. SEQUENCES (NEW) */}
+                <Pressable
+                    style={[styles.card, { borderColor: '#00A8E8' }]}
+                    onPress={() => router.push('/sequences')}
+                >
+                    <View style={styles.iconContainer}>
+                        <Image source={SequencesIcon} style={styles.gameIcon} />
+                    </View>
+                    <View style={styles.cardContent}>
+                        <Text style={[styles.cardTitle, { color: '#00A8E8' }]}>Sequences</Text>
+                        <Text style={styles.cardDesc}>Follow growing move sequences. Train serial spatial memory.</Text>
+                    </View>
+                </Pressable>
+
+                {/* 4. N-BACK */}
                 <Pressable
                     style={[styles.card, { borderColor: '#9b59b6' }]}
                     onPress={() => router.push('/nback')}
@@ -75,7 +90,7 @@ export default function Launcher() {
                     </View>
                 </Pressable>
 
-                {/* 4. COMBOS (Coming Soon) */}
+                {/* 5. COMBOS (Coming Soon) */}
                 <Pressable
                     style={[styles.card, { borderColor: '#e67e22', opacity: 0.8 }]}
                     onPress={handleCombos}
@@ -85,12 +100,12 @@ export default function Launcher() {
                     </View>
                     <View style={styles.cardContent}>
                         <Text style={[styles.cardTitle, { color: '#e67e22' }]}>Combos</Text>
-                        <Text style={styles.cardDesc}>Decoder-style concentration training, reworked for chess. (Coming Soon)</Text>
+                        <Text style={styles.cardDesc}>Decoder-style concentration training. (Coming Soon)</Text>
                     </View>
                 </Pressable>
 
                 {/* Spacer */}
-                <View style={{ height: 10 }} />
+                <View style={{ height: 5 }} />
 
                 {/* SECONDARY ITEMS (Tutorials & Store) - Side-by-Side Compact */}
                 <View style={styles.secondaryRow}>
@@ -132,26 +147,26 @@ const styles = StyleSheet.create({
         backgroundColor: '#111',
     },
     scrollContent: {
-        padding: 20,
-        gap: 15,
-        paddingBottom: 40,
+        padding: 16, // Reduced from 20
+        gap: 10, // Reduced from 12
+        paddingBottom: 20,
     },
     header: {
-        marginBottom: 20,
-        marginTop: 10,
-        alignItems: 'center', // Centered
+        marginBottom: 10, // Reduced from 15
+        marginTop: 5,
+        alignItems: 'center',
     },
     title: {
         color: '#fff',
-        fontSize: 36,
+        fontSize: 32, // Slightly smaller header to save space (was 36)
         fontWeight: 'bold',
         letterSpacing: 1,
     },
     subtitle: {
         color: '#888',
-        fontSize: 14,
-        letterSpacing: 3,
-        marginTop: 5,
+        fontSize: 12, // Reduced from 14
+        letterSpacing: 2,
+        marginTop: 2,
         textTransform: 'uppercase'
     },
 
@@ -160,75 +175,76 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         backgroundColor: '#1a1a1a',
         borderRadius: 16,
-        padding: 20,
+        padding: 16, // Reduced from 20
         alignItems: 'center',
         borderWidth: 1,
         borderColor: '#333',
-        minHeight: 110, // Ensure visual weight
+        minHeight: 85, // Reduced from 100
     },
     iconContainer: {
-        width: 65,
-        height: 65,
+        width: 60, // Slightly smaller (was 65)
+        height: 60,
         borderRadius: 12,
-        marginRight: 15,
-        overflow: 'hidden', // Clip the square image
+        marginRight: 12,
+        overflow: 'hidden',
         borderWidth: 1,
         borderColor: 'rgba(255,255,255,0.1)'
     },
     gameIcon: {
         width: '100%',
         height: '100%',
-        resizeMode: 'cover', // Fill the container
+        resizeMode: 'cover',
     },
     cardContent: {
         flex: 1,
     },
     cardTitle: {
-        fontSize: 22,
+        fontSize: 20, // Reduced from 22
         fontWeight: 'bold',
         color: '#fff',
-        marginBottom: 6,
+        marginBottom: 4, // Reduced from 6
     },
     cardDesc: {
         color: '#bbb',
-        fontSize: 14,
-        lineHeight: 20,
+        fontSize: 13, // Reduced from 14
+        lineHeight: 18,
     },
 
     // Secondary Items (Tutorials / Store)
     secondaryRow: {
         flexDirection: 'row',
-        gap: 12,
+        gap: 10,
     },
     miniCard: {
-        flex: 1, // Equal width
+        flex: 1,
         flexDirection: 'row',
         backgroundColor: '#151515',
         borderRadius: 12,
-        padding: 12,
+        padding: 10,
         alignItems: 'center',
         borderWidth: 1,
         borderColor: '#333',
-        height: 70,
+        height: 60, // Reduced from 70
     },
     miniIcon: {
-        width: 32,
-        height: 32,
-        resizeMode: 'cover', // Fill the shape
-        borderRadius: 8,     // Rounded corners
-        marginRight: 10,
+        width: 28, // Reduced from 32
+        height: 28,
+        resizeMode: 'cover',
+        borderRadius: 6,
+        marginRight: 8,
     },
     miniCardContent: {
         flex: 1,
     },
     miniCardTitle: {
-        fontSize: 16,
+        fontSize: 14, // Reduced from 16
         fontWeight: 'bold',
         color: '#fff',
-        marginBottom: 2,
+        marginBottom: 0,
     },
     miniCardDesc: {
         color: '#888',
-        fontSize: 12,
+        fontSize: 11, // Reduced from 12
+        lineHeight: 12,
     }
 });

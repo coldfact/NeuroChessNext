@@ -216,7 +216,6 @@ export function useNBackGame(): NBackGame {
             ...DEFAULT_STATE,
             isPlaying: true,
             gameStartTime: Date.now(),
-            gameStartTime: Date.now(),
             timeLeft: configRef.current.memorizeTime,
             initialBests: bests,
             activeGameStartTime: null,
@@ -269,6 +268,10 @@ export function useNBackGame(): NBackGame {
                 await AsyncStorage.removeItem('nback_premium_owned');
                 await AsyncStorage.removeItem('remove_ads_owned');
                 await AsyncStorage.removeItem('ad_game_count');
+                await AsyncStorage.removeItem('sequences_unlocked');
+                await AsyncStorage.removeItem('dlc_puzzles_v1');
+                await AsyncStorage.removeItem('suite_owned');
+                await AsyncStorage.removeItem('sequences_config');
                 setConfig({ ...DEFAULT_CONFIG, isPremium: false });
                 console.log('HARD RESET: All data and purchases cleared.');
             } else {

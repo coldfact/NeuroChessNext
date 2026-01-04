@@ -72,6 +72,22 @@ export const DatabaseService = {
                 ghost INTEGER DEFAULT 0
               );
               CREATE INDEX IF NOT EXISTS idx_nback_stats ON nback_games(level, game_time, ghost, percentage DESC);
+
+              CREATE TABLE IF NOT EXISTS sequences_games (
+                  id INTEGER PRIMARY KEY AUTOINCREMENT,
+                  created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                  score INTEGER,
+                  max_score INTEGER,
+                  level INTEGER,
+                  game_time INTEGER,
+                  speed INTEGER,
+                  rounds_completed INTEGER,
+                  max_streak INTEGER,
+                  max_multiplier INTEGER,
+                  accuracy REAL,
+                  confounders INTEGER
+              );
+              CREATE INDEX IF NOT EXISTS idx_sequences_stats ON sequences_games(level, game_time, confounders, score DESC);
             `);
 
                 // Migration for existing tables
@@ -84,6 +100,19 @@ export const DatabaseService = {
                         max_rank_level INTEGER DEFAULT 0
                     );
                     INSERT OR IGNORE INTO nback_stats (id, max_rank_level) VALUES (1, 0);
+
+                    CREATE TABLE IF NOT EXISTS sequences_stats (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        max_rank_level INTEGER DEFAULT 0
+                    );
+                    INSERT OR IGNORE INTO sequences_stats (id, max_rank_level) VALUES (1, 0);
+                `);
+                await this.db.execAsync(`
+                    CREATE TABLE IF NOT EXISTS sequences_stats (
+                        id INTEGER PRIMARY KEY CHECK (id = 1),
+                        max_rank_level INTEGER DEFAULT 0
+                    );
+                    INSERT OR IGNORE INTO sequences_stats (id, max_rank_level) VALUES (1, 0);
                 `);
 
             } catch (e) {
@@ -95,8 +124,6 @@ export const DatabaseService = {
 
         return this._initPromise;
     },
-
-    // ... existing methods ...
 
     async checkRankVerified(level: number) {
         if (!this.db) await this.init();
@@ -112,6 +139,19 @@ export const DatabaseService = {
         }
     },
 
+    async getPuzzleCount() {
+        if (!this.db) await this.init();
+        try {
+            const result = await this.db!.getFirstAsync<{ count: number }>(
+                `SELECT COUNT(*) as count FROM puzzles`
+            );
+            return result?.count ?? 0;
+        } catch (e) {
+            console.error("Failed to get puzzle count:", e);
+            return 0;
+        }
+    },
+
     async getHighestRankVerified() {
         if (!this.db) await this.init();
         try {
@@ -122,6 +162,47 @@ export const DatabaseService = {
         } catch (e) {
             console.error("Failed to get highest rank:", e);
             return 0;
+        }
+    },
+
+    async checkSequencesRankVerified(level: number) {
+        if (!this.db) await this.init();
+        try {
+            // Criteria: Level = X, Time >= 20m, Accuracy >= 80% (0.8)
+            const result = await this.db!.getFirstAsync<{ count: number }>(
+                `SELECT COUNT(*) as count FROM sequences_games WHERE level = ? AND game_time >= 20 AND accuracy >= 0.8 AND confounders = 0`,
+                [level]
+            );
+            return (result?.count ?? 0) > 0;
+        } catch (e) {
+            console.error("Failed to check sequences verification:", e);
+            return false;
+        }
+    },
+
+    async getSequencesHighestRank() {
+        if (!this.db) await this.init();
+        try {
+            const result = await this.db!.getFirstAsync<{ max_rank_level: number }>(
+                `SELECT max_rank_level FROM sequences_stats WHERE id = 1`
+            );
+            return result?.max_rank_level || 0;
+        } catch (e) {
+            // If table doesn't exist yet, return 0 (it is created in init but maybe not joined yet)
+            console.error("Failed to get highest sequences rank:", e);
+            return 0;
+        }
+    },
+
+    async updateSequencesHighestRank(level: number) {
+        if (!this.db) await this.init();
+        try {
+            await this.db!.runAsync(
+                `INSERT OR REPLACE INTO sequences_stats (id, max_rank_level) VALUES (1, ?)`,
+                [level]
+            );
+        } catch (e) {
+            console.error("Failed to update highest sequences rank:", e);
         }
     },
 
@@ -173,6 +254,42 @@ export const DatabaseService = {
         }
     },
 
+    async insertSequencesGame(data: {
+        score: number;
+        max_score: number;
+        level: number;
+        game_time: number;
+        speed: number;
+        rounds_completed: number;
+        max_streak: number;
+        max_multiplier: number;
+        accuracy: number;
+        confounders: boolean;
+    }) {
+        if (!this.db) await this.init();
+        try {
+            await this.db!.runAsync(
+                `INSERT INTO sequences_games (score, max_score, level, game_time, speed, rounds_completed, max_streak, max_multiplier, accuracy, confounders) 
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                [
+                    data.score,
+                    data.max_score,
+                    data.level,
+                    data.game_time,
+                    data.speed,
+                    data.rounds_completed,
+                    data.max_streak,
+                    data.max_multiplier,
+                    data.accuracy,
+                    data.confounders ? 1 : 0
+                ]
+            );
+            console.log("Sequences game saved.");
+        } catch (e) {
+            console.error("Failed to save Sequences game:", e);
+        }
+    },
+
     async clearNBackData() {
         if (!this.db) await this.init();
         try {
@@ -181,6 +298,17 @@ export const DatabaseService = {
             console.log("N-Back history and rank cleared.");
         } catch (e) {
             console.error("Failed to clear N-Back history:", e);
+        }
+    },
+
+    async clearSequencesData() {
+        if (!this.db) await this.init();
+        try {
+            await this.db!.runAsync('DELETE FROM sequences_games');
+            await this.db!.runAsync('UPDATE sequences_stats SET max_rank_level = 0 WHERE id = 1');
+            console.log("Sequences history and rank cleared.");
+        } catch (e) {
+            console.error("Failed to clear Sequences history:", e);
         }
     },
 
@@ -211,6 +339,33 @@ export const DatabaseService = {
         } catch (e) {
             console.error("Failed to fetch N-Back bests:", e);
             return { maxAccuracy: 0, maxStreak: 0 };
+        }
+    },
+
+    async getSequencesBests(level: number, game_time: number, confounders: boolean) {
+        if (!this.db) await this.init();
+        try {
+            const scoreResult = await this.db!.getFirstAsync<{ score: number }>(`
+                SELECT score FROM sequences_games
+                WHERE level = ? AND game_time = ? AND confounders = ? AND score > 0
+                ORDER BY score DESC
+                LIMIT 1
+            `, [level, game_time, confounders ? 1 : 0]);
+
+            const streakResult = await this.db!.getFirstAsync<{ max_streak: number }>(`
+                SELECT max_streak FROM sequences_games
+                WHERE level = ? AND game_time = ? AND confounders = ? AND max_streak > 0
+                ORDER BY max_streak DESC
+                LIMIT 1
+            `, [level, game_time, confounders ? 1 : 0]);
+
+            return {
+                maxScore: scoreResult?.score ?? 0,
+                maxStreak: streakResult?.max_streak ?? 0
+            };
+        } catch (e) {
+            console.error("Failed to fetch Sequences bests:", e);
+            return { maxScore: 0, maxStreak: 0 };
         }
     },
 

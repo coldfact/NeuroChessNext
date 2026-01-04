@@ -12,6 +12,7 @@ export default function StoreScreen() {
     const router = useRouter();
     const [hasExpansion, setHasExpansion] = useState(false);
     const [hasNBackPremium, setHasNBackPremium] = useState(false);
+    const [hasSequencesPremium, setHasSequencesPremium] = useState(false);
     const [hasRemoveAds, setHasRemoveAds] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
     const [downloadProgress, setDownloadProgress] = useState(0);
@@ -23,10 +24,18 @@ export default function StoreScreen() {
     const checkOwnership = async () => {
         try {
             const ownedExpansion = await AsyncStorage.getItem('dlc_puzzles_v1');
-            if (ownedExpansion === 'true') setHasExpansion(true);
+            if (ownedExpansion === 'true') {
+                setHasExpansion(true);
+            } else {
+                const suite = await AsyncStorage.getItem('suite_owned');
+                if (suite === 'true') setHasExpansion(true);
+            }
 
             const ownedNBack = await AsyncStorage.getItem('nback_premium_owned');
             if (ownedNBack === 'true') setHasNBackPremium(true);
+
+            const ownedSequences = await AsyncStorage.getItem('sequences_unlocked');
+            if (ownedSequences === 'true') setHasSequencesPremium(true);
 
             const ownedAds = await AsyncStorage.getItem('remove_ads_owned');
             if (ownedAds === 'true') setHasRemoveAds(true);
@@ -48,6 +57,8 @@ export default function StoreScreen() {
             await processExpansionPurchase();
         } else if (item === 'nback_mastery') {
             await processNBackPurchase();
+        } else if (item === 'sequences_mastery') {
+            await processSequencesPurchase();
         } else if (item === 'remove_ads') {
             await processRemoveAdsPurchase();
         } else if (item === 'bundle_all') {
@@ -88,8 +99,11 @@ export default function StoreScreen() {
                         await new Promise(r => setTimeout(r, 1000));
                         // Unlock everything
                         await AsyncStorage.setItem('nback_premium_owned', 'true');
+                        await AsyncStorage.setItem('sequences_unlocked', 'true');
+                        await AsyncStorage.setItem('suite_owned', 'true');
                         await AdService.purchaseRemoveAds();
                         setHasNBackPremium(true);
+                        setHasSequencesPremium(true);
                         setHasRemoveAds(true);
 
                         // Start download for puzzles
@@ -120,6 +134,28 @@ export default function StoreScreen() {
         );
     };
 
+    const processSequencesPurchase = async () => {
+        Alert.alert(
+            "Confirm Purchase",
+            "Unlock Sequences Mastery (Moves 4-9) for $1.99?\n(Also removes ads!)",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Buy",
+                    onPress: async () => {
+                        await new Promise(r => setTimeout(r, 1000));
+                        await AsyncStorage.setItem('sequences_unlocked', 'true');
+                        await AsyncStorage.setItem('remove_ads_owned', 'true');
+                        await AdService.purchaseRemoveAds();
+                        setHasSequencesPremium(true);
+                        setHasRemoveAds(true);
+                        Alert.alert("Success", "Sequences Mastery unlocked! Ads removed.");
+                    }
+                }
+            ]
+        );
+    };
+
     const processExpansionPurchase = async () => {
         Alert.alert(
             "Confirm Purchase",
@@ -140,6 +176,23 @@ export default function StoreScreen() {
     const downloadAndInstallDLC = async () => {
         try {
             const fileUri = FileSystem.cacheDirectory + 'puzzles_expansion.sqlite';
+
+            // Check if already extensive (e.g. Nuke logic doesn't clear DB, but user wants idempotency)
+            // But wait, if Nuke clears "dlc_puzzles_v1" key, we don't want to re-merge if the DB still has them.
+            // Or maybe Nuke DOESN'T clear Puzzles DB table (it doesn't, only user_progress).
+            // So we check count.
+            const puzzleCount = await DatabaseService.getPuzzleCount();
+            if (puzzleCount > 7000) {
+                console.log(`Puzzle count is ${puzzleCount}. Expansion likely already installed.`);
+                setDownloadProgress(1);
+                await new Promise(r => setTimeout(r, 500));
+                await AsyncStorage.setItem('dlc_puzzles_v1', 'true');
+                setHasExpansion(true);
+                // If called from bundle, we still want to proceed with other unlocks (which are synchronous before this)
+                // But for this function, we can just return or show success.
+                Alert.alert("Success", "Expansion already active. Restored access.");
+                return;
+            }
 
             console.log(`Downloading DLC from ${DLC_ENDPOINT}...`);
             const result = await FileSystem.downloadAsync(DLC_ENDPOINT, fileUri);
@@ -173,6 +226,7 @@ export default function StoreScreen() {
         // Mock restore
         const owned = await AsyncStorage.getItem('dlc_puzzles_v1');
         const ownedNBack = await AsyncStorage.getItem('nback_premium_owned');
+        const ownedSequences = await AsyncStorage.getItem('sequences_unlocked');
         const ownedAds = await AsyncStorage.getItem('remove_ads_owned');
 
         let restored = false;
@@ -183,6 +237,10 @@ export default function StoreScreen() {
         }
         if (ownedNBack === 'true') {
             setHasNBackPremium(true);
+            restored = true;
+        }
+        if (ownedSequences === 'true') {
+            setHasSequencesPremium(true);
             restored = true;
         }
         if (ownedAds === 'true') {
@@ -313,6 +371,36 @@ export default function StoreScreen() {
                     </View>
                 </View>
 
+                {/* Section: Sequences (Above N-Back Mastery per request? User said "above the Neurochess unlock box" - assuming "Unlock N-Back Mastery" is one. Or maybe "Upgrades" section. Putting it nearby N-Back) */}
+                <View style={[styles.card, { borderColor: '#4ECDC4' }]}>
+                    <View style={styles.cardHeader}>
+                        <Brain color="#4ECDC4" size={24} />
+                        <Text style={styles.cardTitle}>NeuroChess Sequences</Text>
+                    </View>
+                    <Text style={styles.cardDesc}>
+                        Master the flow of pieces. Unlock extended sequence lengths.
+                    </Text>
+
+                    <View style={styles.itemRow}>
+                        <View style={styles.itemInfo}>
+                            <Text style={styles.itemTitle}>Sequences Mastery</Text>
+                            <Text style={styles.itemMeta}>Unlock Moves 4-9</Text>
+                            <Text style={styles.itemSub}>Includes Ad Removal.</Text>
+                        </View>
+
+                        {hasSequencesPremium ? (
+                            <View style={styles.ownedBadge}>
+                                <Check color="#fff" size={16} />
+                                <Text style={styles.ownedText}>Owned</Text>
+                            </View>
+                        ) : (
+                            <Pressable style={styles.buyBtn} onPress={() => handlePurchase('sequences_mastery')}>
+                                <Text style={styles.buyBtnText}>$1.99</Text>
+                            </Pressable>
+                        )}
+                    </View>
+                </View>
+
                 {/* Section: Bundle */}
                 <View style={[styles.card, styles.bundleCard]}>
                     <View style={styles.cardHeader}>
@@ -329,9 +417,16 @@ export default function StoreScreen() {
                             <Text style={styles.itemMeta}>Includes all features</Text>
                             <Text style={styles.itemSub}>Puzzles Expansion + N-back Mastery + Ads Removed.</Text>
                         </View>
-                        <Pressable style={styles.buyBtn} onPress={() => handlePurchase('bundle_all')}>
-                            <Text style={styles.buyBtnText}>$3.99</Text>
-                        </Pressable>
+                        {hasExpansion && hasNBackPremium && hasSequencesPremium && hasRemoveAds ? (
+                            <View style={styles.ownedBadge}>
+                                <Check color="#fff" size={16} />
+                                <Text style={styles.ownedText}>Owned</Text>
+                            </View>
+                        ) : (
+                            <Pressable style={styles.buyBtn} onPress={() => handlePurchase('bundle_all')}>
+                                <Text style={styles.buyBtnText}>$3.99</Text>
+                            </Pressable>
+                        )}
                     </View>
                 </View>
 

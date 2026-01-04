@@ -58,9 +58,7 @@ export default function NBackGameScreen() {
                         </Pressable>
                     </View>
                 </View>
-                <Pressable style={{ padding: 10 }} onPress={() => setShowSettings(true)} hitSlop={10}>
-                    <Settings color="#fff" size={24} />
-                </Pressable>
+                <View style={{ width: 44 }} />
             </View>
 
             {/* Score & Progress */}
@@ -201,7 +199,7 @@ export default function NBackGameScreen() {
 
                                 <View style={{ alignItems: 'center' }}>
                                     <Text style={{ fontSize: 12, color: '#aaa', marginBottom: 0 }}>Max Streak</Text>
-                                    <Text style={{ fontSize: 28, color: '#fff', fontWeight: 'bold', marginBottom: 0 }}>
+                                    <Text style={{ fontSize: 32, color: '#fff', fontWeight: 'bold', marginBottom: 0 }}>
                                         {game.state.maxStreak}
                                     </Text>
                                 </View>
