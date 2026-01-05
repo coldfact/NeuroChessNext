@@ -236,7 +236,10 @@ export default function NBackGameScreen() {
                 currentLevel={game.config.n}
                 onSelectLevel={(n) => game.updateConfig({ n })}
                 isPremium={game.config.isPremium}
-                onPurchase={game.upgradeToPremium}
+                onPurchase={() => {
+                    setShowLevelSelector(false);
+                    router.push('/store');
+                }}
             />
 
             <DurationSelectorModal

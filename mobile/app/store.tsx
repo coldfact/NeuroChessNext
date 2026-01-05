@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, ActivityIndicator, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ScrollView, SafeAreaView, ActivityIndicator, Alert, Platform, Image } from 'react-native';
 import { Stack, useRouter } from 'expo-router';
 import { ChevronLeft, Brain, Layers, ShoppingBag, RefreshCw, Check, DownloadCloud, Zap } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -21,6 +21,12 @@ export default function StoreScreen() {
         checkOwnership();
     }, []);
 
+    // Assets
+    const PuzzlesIcon = require('../assets/icon_puzzles.png');
+    const NBackIcon = require('../assets/icon_nback.png');
+    const SequencesIcon = require('../assets/icon_sequences.png');
+    const StoreIcon = require('../assets/icon_store.png');
+
     const checkOwnership = async () => {
         try {
             const ownedExpansion = await AsyncStorage.getItem('dlc_puzzles_v1');
@@ -39,11 +45,6 @@ export default function StoreScreen() {
 
             const ownedAds = await AsyncStorage.getItem('remove_ads_owned');
             if (ownedAds === 'true') setHasRemoveAds(true);
-
-            // Also check implicit ownership (Bundle logic handled by AdService)
-            // But here we want to show specific badges. 
-            // If they bought the bundle, they own everything.
-            // For now, let's keep it simple key-based.
         } catch (e) { console.error(e); }
     };
 
@@ -177,10 +178,7 @@ export default function StoreScreen() {
         try {
             const fileUri = FileSystem.cacheDirectory + 'puzzles_expansion.sqlite';
 
-            // Check if already extensive (e.g. Nuke logic doesn't clear DB, but user wants idempotency)
-            // But wait, if Nuke clears "dlc_puzzles_v1" key, we don't want to re-merge if the DB still has them.
-            // Or maybe Nuke DOESN'T clear Puzzles DB table (it doesn't, only user_progress).
-            // So we check count.
+            // Check if already extensive
             const puzzleCount = await DatabaseService.getPuzzleCount();
             if (puzzleCount > 7000) {
                 console.log(`Puzzle count is ${puzzleCount}. Expansion likely already installed.`);
@@ -188,8 +186,6 @@ export default function StoreScreen() {
                 await new Promise(r => setTimeout(r, 500));
                 await AsyncStorage.setItem('dlc_puzzles_v1', 'true');
                 setHasExpansion(true);
-                // If called from bundle, we still want to proceed with other unlocks (which are synchronous before this)
-                // But for this function, we can just return or show success.
                 Alert.alert("Success", "Expansion already active. Restored access.");
                 return;
             }
@@ -223,7 +219,6 @@ export default function StoreScreen() {
     };
 
     const handleRestore = async () => {
-        // Mock restore
         const owned = await AsyncStorage.getItem('dlc_puzzles_v1');
         const ownedNBack = await AsyncStorage.getItem('nback_premium_owned');
         const ownedSequences = await AsyncStorage.getItem('sequences_unlocked');
@@ -264,75 +259,57 @@ export default function StoreScreen() {
                 <Pressable onPress={() => router.back()} style={styles.iconBtn}>
                     <ChevronLeft color="#fff" size={28} />
                 </Pressable>
-                <Text style={styles.headerTitle}>NeuroChess Suite</Text>
+                <Text style={styles.headerTitle}>NeuroChess Store</Text>
                 <View style={{ width: 40 }} />
             </View>
 
             <ScrollView contentContainerStyle={styles.content}>
 
-                {/* Intro */}
-                <Text style={styles.sectionTitle}>Store</Text>
-
-                {/* [NEW] Remove Ads - Top Item */}
-                <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <Zap color="#f1c40f" size={24} />
-                        <Text style={styles.cardTitle}>Remove All Ads</Text>
+                {/* SUITE UPGRADE (TOP PRIORITY) */}
+                <View style={[styles.compactCard, { borderColor: '#f1c40f', backgroundColor: '#2c2500' }]}>
+                    <View style={styles.iconBox}>
+                        <Image source={StoreIcon} style={styles.gameIcon} />
                     </View>
-                    <Text style={styles.cardDesc}>
-                        Remove all advertisements from NeuroChess.
-                        Note: Purchasing ANY premium item below will ALSO remove ads automatically!
-                    </Text>
+                    <View style={styles.compactInfo}>
+                        <Text style={[styles.compactTitle, { color: '#f1c40f' }]}>Suite Upgrade</Text>
+                        <Text style={styles.compactDesc}>Unlock Everything: Puzzles, N-Back, Sequences & Remove Ads.</Text>
+                    </View>
 
-                    <View style={styles.itemRow}>
-                        <View style={styles.itemInfo}>
-                            <Text style={styles.itemTitle}>Ad-Free Experience</Text>
-                            <Text style={styles.itemMeta}>Permanent Unlock</Text>
-                        </View>
-
-                        {hasRemoveAds || hasExpansion || hasNBackPremium ? (
+                    <View style={styles.actionBox}>
+                        {hasExpansion && hasNBackPremium && hasSequencesPremium && hasRemoveAds ? (
                             <View style={styles.ownedBadge}>
-                                <Check color="#fff" size={16} />
+                                <Check color="#fff" size={14} />
                                 <Text style={styles.ownedText}>Owned</Text>
                             </View>
                         ) : (
-                            <Pressable style={styles.buyBtn} onPress={() => handlePurchase('remove_ads')}>
-                                <Text style={styles.buyBtnText}>$2.99</Text>
+                            <Pressable style={[styles.buyBtn, { backgroundColor: '#f1c40f' }]} onPress={() => handlePurchase('bundle_all')}>
+                                <Text style={[styles.buyBtnText, { color: '#000' }]}>$3.99</Text>
                             </Pressable>
                         )}
                     </View>
                 </View>
 
-                {/* Section: Logic / Puzzles */}
-                <Text style={styles.sectionTitle}>Upgrades</Text>
-                <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <Brain color="#3498db" size={24} />
-                        <Text style={styles.cardTitle}>NeuroChess Puzzles</Text>
+                <View style={styles.separator} />
+
+                {/* INDIVIDUAL ITEMS */}
+
+                {/* PUZZLES */}
+                <View style={[styles.compactCard, { borderColor: '#4ECDC4' }]}>
+                    <View style={styles.iconBox}>
+                        <Image source={PuzzlesIcon} style={styles.gameIcon} />
                     </View>
-                    <Text style={styles.cardDesc}>
-                        Running out of challenges? Expand your offline database significantly.
-                    </Text>
-
-                    <View style={styles.itemRow}>
-                        <View style={styles.itemInfo}>
-                            <Text style={styles.itemTitle}>Expansion Pack</Text>
-                            <Text style={styles.itemMeta}>+9,000 puzzles / band</Text>
-                            <Text style={styles.itemSub}>Includes Ad Removal.</Text>
-                        </View>
-
+                    <View style={styles.compactInfo}>
+                        <Text style={[styles.compactTitle, { color: '#4ECDC4' }]}>Puzzles Expansion</Text>
+                        <Text style={styles.compactDesc}>+9,000 puzzles & Remove Ads.</Text>
+                    </View>
+                    <View style={styles.actionBox}>
                         {hasExpansion ? (
                             <View style={styles.ownedBadge}>
-                                <Check color="#fff" size={16} />
+                                <Check color="#fff" size={14} />
                                 <Text style={styles.ownedText}>Owned</Text>
                             </View>
                         ) : isDownloading ? (
-                            <View style={styles.downloadingContainer}>
-                                <ActivityIndicator size="small" color="#3498db" />
-                                <Text style={styles.progressText}>
-                                    {Math.round(downloadProgress * 100)}%
-                                </Text>
-                            </View>
+                            <ActivityIndicator size="small" color="#4ECDC4" />
                         ) : (
                             <Pressable style={styles.buyBtn} onPress={() => handlePurchase('puzzles_expansion')}>
                                 <Text style={styles.buyBtnText}>$2.99</Text>
@@ -341,26 +318,19 @@ export default function StoreScreen() {
                     </View>
                 </View>
 
-                {/* Section: Memory / N-Back */}
-                <View style={styles.card}>
-                    <View style={styles.cardHeader}>
-                        <Layers color="#9b59b6" size={24} />
-                        <Text style={styles.cardTitle}>NeuroChess N-back</Text>
+                {/* N-BACK */}
+                <View style={[styles.compactCard, { borderColor: '#9b59b6' }]}>
+                    <View style={styles.iconBox}>
+                        <Image source={NBackIcon} style={styles.gameIcon} />
                     </View>
-                    <Text style={styles.cardDesc}>
-                        Push your working memory to the limit.
-                    </Text>
-
-                    <View style={styles.itemRow}>
-                        <View style={styles.itemInfo}>
-                            <Text style={styles.itemTitle}>Unlock Mastery</Text>
-                            <Text style={styles.itemMeta}>Up to Depth 9</Text>
-                            <Text style={styles.itemSub}>Includes Ad Removal.</Text>
-                        </View>
-
+                    <View style={styles.compactInfo}>
+                        <Text style={[styles.compactTitle, { color: '#9b59b6' }]}>N-Back Mastery</Text>
+                        <Text style={styles.compactDesc}>Unlock Levels 2-9 & Remove Ads.</Text>
+                    </View>
+                    <View style={styles.actionBox}>
                         {hasNBackPremium ? (
                             <View style={styles.ownedBadge}>
-                                <Check color="#fff" size={16} />
+                                <Check color="#fff" size={14} />
                                 <Text style={styles.ownedText}>Owned</Text>
                             </View>
                         ) : (
@@ -371,26 +341,19 @@ export default function StoreScreen() {
                     </View>
                 </View>
 
-                {/* Section: Sequences (Above N-Back Mastery per request? User said "above the Neurochess unlock box" - assuming "Unlock N-Back Mastery" is one. Or maybe "Upgrades" section. Putting it nearby N-Back) */}
-                <View style={[styles.card, { borderColor: '#4ECDC4' }]}>
-                    <View style={styles.cardHeader}>
-                        <Brain color="#4ECDC4" size={24} />
-                        <Text style={styles.cardTitle}>NeuroChess Sequences</Text>
+                {/* SEQUENCES */}
+                <View style={[styles.compactCard, { borderColor: '#00A8E8' }]}>
+                    <View style={styles.iconBox}>
+                        <Image source={SequencesIcon} style={styles.gameIcon} />
                     </View>
-                    <Text style={styles.cardDesc}>
-                        Master the flow of pieces. Unlock extended sequence lengths.
-                    </Text>
-
-                    <View style={styles.itemRow}>
-                        <View style={styles.itemInfo}>
-                            <Text style={styles.itemTitle}>Sequences Mastery</Text>
-                            <Text style={styles.itemMeta}>Unlock Moves 4-9</Text>
-                            <Text style={styles.itemSub}>Includes Ad Removal.</Text>
-                        </View>
-
+                    <View style={styles.compactInfo}>
+                        <Text style={[styles.compactTitle, { color: '#00A8E8' }]}>Sequences Mastery</Text>
+                        <Text style={styles.compactDesc}>Unlock Long Sequences & Remove Ads.</Text>
+                    </View>
+                    <View style={styles.actionBox}>
                         {hasSequencesPremium ? (
                             <View style={styles.ownedBadge}>
-                                <Check color="#fff" size={16} />
+                                <Check color="#fff" size={14} />
                                 <Text style={styles.ownedText}>Owned</Text>
                             </View>
                         ) : (
@@ -401,38 +364,35 @@ export default function StoreScreen() {
                     </View>
                 </View>
 
-                {/* Section: Bundle */}
-                <View style={[styles.card, styles.bundleCard]}>
-                    <View style={styles.cardHeader}>
-                        <ShoppingBag color="#f1c40f" size={24} />
-                        <Text style={styles.cardTitle}>Suite Upgrade</Text>
-                    </View>
-                    <Text style={styles.cardDesc}>
-                        Get everything at once and save.
-                    </Text>
+                <View style={styles.separator} />
 
-                    <View style={styles.itemRow}>
-                        <View style={styles.itemInfo}>
-                            <Text style={styles.itemTitle}>Upgrade All</Text>
-                            <Text style={styles.itemMeta}>Includes all features</Text>
-                            <Text style={styles.itemSub}>Puzzles Expansion + N-back Mastery + Ads Removed.</Text>
-                        </View>
-                        {hasExpansion && hasNBackPremium && hasSequencesPremium && hasRemoveAds ? (
-                            <View style={styles.ownedBadge}>
-                                <Check color="#fff" size={16} />
+                {/* REMOVE ADS (Minimal) */}
+                <View style={[styles.compactCard, { borderColor: '#555', backgroundColor: '#222' }]}>
+                    <View style={[styles.iconBox, { backgroundColor: '#333', borderWidth: 0 }]}>
+                        <Zap color="#aaa" size={24} />
+                    </View>
+                    <View style={styles.compactInfo}>
+                        <Text style={[styles.compactTitle, { color: '#aaa' }]}>Remove Ads Only</Text>
+                        <Text style={styles.compactDesc}>Included with any purchase above.</Text>
+                    </View>
+                    <View style={styles.actionBox}>
+                        {hasRemoveAds ? (
+                            <View style={[styles.ownedBadge, { backgroundColor: '#555' }]}>
+                                <Check color="#fff" size={14} />
                                 <Text style={styles.ownedText}>Owned</Text>
                             </View>
                         ) : (
-                            <Pressable style={styles.buyBtn} onPress={() => handlePurchase('bundle_all')}>
-                                <Text style={styles.buyBtnText}>$3.99</Text>
+                            <Pressable style={[styles.buyBtn, { backgroundColor: '#555' }]} onPress={() => handlePurchase('remove_ads')}>
+                                <Text style={styles.buyBtnText}>$2.99</Text>
                             </Pressable>
                         )}
                     </View>
                 </View>
 
+
                 {/* Restore */}
                 <Pressable style={styles.restoreBtn} onPress={handleRestore}>
-                    <RefreshCw color="#888" size={16} />
+                    <RefreshCw color="#666" size={14} />
                     <Text style={styles.restoreText}>Restore Purchases</Text>
                 </Pressable>
 
@@ -444,7 +404,7 @@ export default function StoreScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#121212',
+        backgroundColor: '#111',
     },
     header: {
         flexDirection: 'row',
@@ -453,7 +413,8 @@ const styles = StyleSheet.create({
         paddingHorizontal: 16,
         paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: '#333',
+        borderBottomColor: '#222',
+        backgroundColor: '#111'
     },
     headerTitle: {
         color: '#fff',
@@ -464,127 +425,101 @@ const styles = StyleSheet.create({
         padding: 8,
     },
     content: {
-        padding: 20,
-        gap: 20,
-    },
-    sectionTitle: {
-        color: '#fff',
-        fontSize: 24,
-        fontWeight: 'bold',
-        marginBottom: 4,
-    },
-    subtitle: {
-        color: '#aaa',
-        fontSize: 14,
-        marginBottom: 10,
-    },
-    card: {
-        backgroundColor: '#1e1e1e',
-        borderRadius: 12,
         padding: 16,
+        gap: 12, // Compact gap
+    },
+    separator: {
+        height: 1,
+        backgroundColor: '#333',
+        marginVertical: 5,
+    },
+
+    // COMPACT CARD STYLE
+    compactCard: {
+        flexDirection: 'row',
+        backgroundColor: '#1a1a1a',
+        borderRadius: 12,
+        padding: 10,
+        alignItems: 'center',
         borderWidth: 1,
-        borderColor: '#333',
-        gap: 12,
+        height: 70, // Fixed small height
     },
-    bundleCard: {
-        borderColor: '#f1c40f',
-        backgroundColor: '#1e1e1e',
-    },
-    cardHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 10,
-        marginBottom: 4,
-    },
-    cardTitle: {
-        color: '#fff',
-        fontSize: 18,
-        fontWeight: 'bold',
-    },
-    cardDesc: {
-        color: '#ccc',
-        fontSize: 14,
-        lineHeight: 20,
-    },
-    itemRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        marginTop: 8,
-        backgroundColor: '#252525',
-        padding: 12,
+    iconBox: {
+        width: 48,
+        height: 48,
         borderRadius: 8,
-    },
-    itemInfo: {
-        flex: 1,
+        overflow: 'hidden',
         marginRight: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#000'
     },
-    itemTitle: {
-        color: '#fff',
+    gameIcon: {
+        width: '100%',
+        height: '100%',
+        resizeMode: 'cover',
+    },
+    compactInfo: {
+        flex: 1,
+        justifyContent: 'center',
+    },
+    compactTitle: {
         fontSize: 16,
-        fontWeight: '600',
-    },
-    itemMeta: {
-        color: '#3498db',
-        fontSize: 13,
         fontWeight: 'bold',
-        marginTop: 2,
+        marginBottom: 2,
     },
-    itemSub: {
+    compactDesc: {
         color: '#888',
-        fontSize: 12,
-        marginTop: 2,
+        fontSize: 11,
+        lineHeight: 14,
+        marginRight: 4
     },
+    actionBox: {
+        minWidth: 70,
+        alignItems: 'flex-end',
+        justifyContent: 'center'
+    },
+
+    // BUTTONS
     buyBtn: {
         backgroundColor: '#27ae60',
-        paddingVertical: 8,
-        paddingHorizontal: 16,
+        paddingVertical: 6,
+        paddingHorizontal: 12,
         borderRadius: 6,
-        minWidth: 80,
+        minWidth: 70,
         alignItems: 'center',
     },
     buyBtnText: {
         color: '#fff',
         fontWeight: 'bold',
-        fontSize: 14,
+        fontSize: 13,
     },
     ownedBadge: {
-        backgroundColor: '#2ecc71',
-        paddingVertical: 8,
-        paddingHorizontal: 12,
+        backgroundColor: '#27ae60',
+        paddingVertical: 6,
+        paddingHorizontal: 8,
         borderRadius: 6,
-        minWidth: 80,
         flexDirection: 'row',
         alignItems: 'center',
-        justifyContent: 'center',
-        gap: 4
+        gap: 4,
+        opacity: 0.8
     },
     ownedText: {
         color: '#fff',
         fontWeight: 'bold',
-        fontSize: 14,
+        fontSize: 12,
     },
-    downloadingContainer: {
-        minWidth: 80,
-        justifyContent: 'center',
-        alignItems: 'center',
-    },
-    progressText: {
-        color: '#3498db',
-        fontSize: 10,
-        marginTop: 2,
-        fontWeight: 'bold',
-    },
+
     restoreBtn: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 8,
+        gap: 6,
         marginTop: 20,
-        padding: 15,
+        padding: 10,
     },
     restoreText: {
-        color: '#888',
-        fontSize: 14,
+        color: '#666',
+        fontSize: 12,
     }
 });

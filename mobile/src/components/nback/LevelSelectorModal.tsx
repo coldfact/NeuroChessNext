@@ -31,10 +31,10 @@ export default function LevelSelectorModal({
                 [
                     { text: "Cancel", style: "cancel" },
                     {
-                        text: "Unlock",
+                        text: "Go to Store",
                         onPress: () => {
+                            onClose();
                             onPurchase();
-                            Alert.alert("Success!", "All N-Back levels are now unlocked.");
                         }
                     }
                 ]
@@ -110,7 +110,7 @@ export default function LevelSelectorModal({
                     </View>
                 </View>
             </View>
-        </Modal>
+        </Modal >
     );
 }
 
