@@ -6,9 +6,9 @@ import argparse
 # Note: Assuming script is run from python_scripts/, so DB is in parent root
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE_DB = os.path.join(BASE_DIR, "lichess_db_puzzles.sqlite")
-DEST_DB = os.path.join(BASE_DIR, "neurochess_short.db")
+DEST_DB = os.path.join(BASE_DIR, "neurochess_long.db")
 
-MAX_PLY = 6
+MIN_PLY = 8
 BATCH_SIZE = 10000
 
 # Define your custom bands here for easy adjustment
@@ -77,7 +77,7 @@ def get_stats():
         count = cursor.fetchone()[0]
         print(f"{theme:<20} | {count:<10,}")
 
-def create_short_puzzles_db():
+def create_long_puzzles_db():
     print(f"Source DB: {SOURCE_DB}")
     print(f"Dest DB:   {DEST_DB}")
 
@@ -136,7 +136,7 @@ def create_short_puzzles_db():
 
         batch = []
         count = 0
-        print(f"Migrating and Enriching data (Max Ply: {MAX_PLY})...")
+        print(f"Migrating and Enriching data (Min Ply: {MIN_PLY})...")
         
         # Re-query source for efficient iteration
         src_cursor.execute("SELECT * FROM puzzles")
@@ -145,15 +145,14 @@ def create_short_puzzles_db():
             moves_list = row[moves_idx].split()
             ply_count = len(moves_list)
             
-            # Short puzzle check
-            if ply_count <= MAX_PLY:
+            # Long puzzle check
+            if ply_count >= MIN_PLY:
                 
                 # 1. Band
                 band = get_band_label(row[rating_idx])
                 
                 # 2. Move Count (2 ply = 1 move, 3 ply = 2 moves, etc.)
                 # Using (ply + 1) // 2 to round up (e.g. 1 ply = 1 move, 2 ply = 1 move, 3 ply = 2 moves)
-                # User guidance: "2 ply is considered ONE move... marked as 1"
                 move_count = (ply_count + 1) // 2
 
                 # 3. Themes
@@ -239,11 +238,11 @@ def create_short_puzzles_db():
         dest_conn.close()
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Lichess Puzzle Manager")
+    parser = argparse.ArgumentParser(description="Lichess Long Puzzle Manager")
     parser.add_argument("--stats", action="store_true", help="Show stats for the subset DB")
     args = parser.parse_args()
 
     if args.stats:
         get_stats()
     else:
-        create_short_puzzles_db()
+        create_long_puzzles_db()

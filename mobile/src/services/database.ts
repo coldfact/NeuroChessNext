@@ -3,6 +3,7 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
 
 const DB_NAME = 'neurochess.db';
+const DB_LONG_NAME = 'neurochess_long.db';
 
 export const DatabaseService = {
     db: null as SQLite.SQLiteDatabase | null,
@@ -31,23 +32,92 @@ export const DatabaseService = {
                 });
             }
 
+            const longDbPath = `${FileSystem.documentDirectory}SQLite/${DB_LONG_NAME}`;
+            /* 
+            // Long DB is now DLC, not bundled.
+            const longFileInfo = await FileSystem.getInfoAsync(longDbPath);
+            if (!longFileInfo.exists) {
+                console.log("Initialize: Copying bundled LONG database...");
+                try {
+                    // const asset = Asset.fromModule(require('../../assets/neurochess_long.db'));
+                    // await asset.downloadAsync();
+                    // await FileSystem.copyAsync({
+                    //     from: asset.localUri || asset.uri,
+                    //     to: longDbPath,
+                    // });
+                } catch (e) {
+                    console.error("Failed to copy long database", e);
+                }
+            }
+            */
+
             // 2. Open Database
             this.db = await SQLite.openDatabaseAsync(DB_NAME);
 
+            // Attach Long Database
+            try {
+                // We need to use raw exec/run for ATTACH? expo-sqlite openDatabaseAsync returns a db object.
+                // Note: The path for ATTACH must be the full filesystem path
+                await this.db.runAsync(`ATTACH DATABASE '${longDbPath}' AS long`);
+                console.log("Attached Long Database");
+            } catch (e) {
+                console.error("Failed to attach long database:", e);
+            }
+
             // 3. Ensure User Tables (if missing from bundle)
             try {
+                // Migration: Rename user_progress to puzzles_games if exists
+                await this.db.runAsync(`ALTER TABLE user_progress RENAME TO puzzles_games`).catch(() => { });
+
                 await this.db.execAsync(`
-              CREATE TABLE IF NOT EXISTS user_progress (
+              CREATE TABLE IF NOT EXISTS puzzles_games (
                 puzzle_id TEXT PRIMARY KEY,
                 status TEXT,
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
               );
-              CREATE INDEX IF NOT EXISTS idx_user_status ON user_progress(status);
+              CREATE INDEX IF NOT EXISTS idx_puzzles_games_status ON puzzles_games(status);
+              
+              CREATE TABLE IF NOT EXISTS deep_games (
+                puzzle_id TEXT PRIMARY KEY,
+                status TEXT,
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+              );
+              CREATE INDEX IF NOT EXISTS idx_deep_games_status ON deep_games(status);
+
+              CREATE TABLE IF NOT EXISTS puzzles_long (
+                 PuzzleId TEXT PRIMARY KEY,
+                 FEN TEXT,
+                 Moves TEXT,
+                 Rating INTEGER,
+                 RatingDeviation INTEGER,
+                 Popularity INTEGER,
+                 NbPlays INTEGER,
+                 Themes TEXT,
+                 GameUrl TEXT,
+                 OpeningTags TEXT,
+                 rating_band TEXT,
+                 move_count INTEGER,
+                 has_opening INTEGER DEFAULT 0,
+                 has_middlegame INTEGER DEFAULT 0,
+                 has_endgame INTEGER DEFAULT 0,
+                 has_attraction INTEGER DEFAULT 0,
+                 has_defensiveMove INTEGER DEFAULT 0,
+                 has_deflection INTEGER DEFAULT 0,
+                 has_discoveredAttack INTEGER DEFAULT 0,
+                 has_hangingPiece INTEGER DEFAULT 0,
+                 has_intermezzo INTEGER DEFAULT 0,
+                 has_quietMove INTEGER DEFAULT 0,
+                 has_sacrifice INTEGER DEFAULT 0,
+                 has_skewer INTEGER DEFAULT 0
+              );
+              CREATE INDEX IF NOT EXISTS idx_puzzles_long_rating ON puzzles_long(Rating);
               
               CREATE TABLE IF NOT EXISTS user_favorites (
                 puzzle_id TEXT PRIMARY KEY,
+                mode TEXT DEFAULT 'standard', 
                 timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
               );
+              CREATE INDEX IF NOT EXISTS idx_favorites_mode ON user_favorites(mode);
               
               CREATE TABLE IF NOT EXISTS player_stats (
                 mode TEXT PRIMARY KEY,
@@ -107,13 +177,12 @@ export const DatabaseService = {
                     );
                     INSERT OR IGNORE INTO sequences_stats (id, max_rank_level) VALUES (1, 0);
                 `);
-                await this.db.execAsync(`
-                    CREATE TABLE IF NOT EXISTS sequences_stats (
-                        id INTEGER PRIMARY KEY CHECK (id = 1),
-                        max_rank_level INTEGER DEFAULT 0
-                    );
-                    INSERT OR IGNORE INTO sequences_stats (id, max_rank_level) VALUES (1, 0);
-                `);
+
+                // Migration: Add mode column to user_favorites if missing
+                await this.db.runAsync('ALTER TABLE user_favorites ADD COLUMN mode TEXT DEFAULT "standard"').catch(() => { });
+
+                // Initialize Deep Stats if missing
+                await this.db.runAsync(`INSERT OR IGNORE INTO player_stats(mode, rating, rd, vol, last_active) VALUES('deep', 1200, 350, 0.06, CURRENT_TIMESTAMP)`);
 
             } catch (e) {
                 console.error("Schema creation/check failed", e);
@@ -198,7 +267,7 @@ export const DatabaseService = {
         if (!this.db) await this.init();
         try {
             await this.db!.runAsync(
-                `INSERT OR REPLACE INTO sequences_stats (id, max_rank_level) VALUES (1, ?)`,
+                `INSERT OR REPLACE INTO sequences_stats(id, max_rank_level) VALUES(1, ?)`,
                 [level]
             );
         } catch (e) {
@@ -233,8 +302,8 @@ export const DatabaseService = {
         if (!this.db) await this.init();
         try {
             await this.db!.runAsync(
-                `INSERT INTO nback_games (level, game_time, move_time, bias, rounds, max_streak, score, possible_score, percentage, ghost) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO nback_games(level, game_time, move_time, bias, rounds, max_streak, score, possible_score, percentage, ghost)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     data.level,
                     data.game_time,
@@ -269,8 +338,8 @@ export const DatabaseService = {
         if (!this.db) await this.init();
         try {
             await this.db!.runAsync(
-                `INSERT INTO sequences_games (score, max_score, level, game_time, speed, rounds_completed, max_streak, max_multiplier, accuracy, confounders) 
-                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO sequences_games(score, max_score, level, game_time, speed, rounds_completed, max_streak, max_multiplier, accuracy, confounders)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
                     data.score,
                     data.max_score,
@@ -322,7 +391,7 @@ export const DatabaseService = {
                 WHERE level = ? AND game_time = ? AND ghost = 0
                 ORDER BY percentage DESC, possible_score DESC 
                 LIMIT 1
-            `, [level, game_time]);
+                    `, [level, game_time]);
 
             // Best Streak
             const streakResult = await this.db!.getFirstAsync<{ max_streak: number }>(`
@@ -330,7 +399,7 @@ export const DatabaseService = {
                 WHERE level = ? AND game_time = ? AND ghost = 0
                 ORDER BY max_streak DESC, percentage DESC
                 LIMIT 1
-            `, [level, game_time]);
+                    `, [level, game_time]);
 
             return {
                 maxAccuracy: accResult?.percentage ?? 0,
@@ -350,14 +419,14 @@ export const DatabaseService = {
                 WHERE level = ? AND game_time = ? AND confounders = ? AND score > 0
                 ORDER BY score DESC
                 LIMIT 1
-            `, [level, game_time, confounders ? 1 : 0]);
+                    `, [level, game_time, confounders ? 1 : 0]);
 
             const streakResult = await this.db!.getFirstAsync<{ max_streak: number }>(`
                 SELECT max_streak FROM sequences_games
                 WHERE level = ? AND game_time = ? AND confounders = ? AND max_streak > 0
                 ORDER BY max_streak DESC
                 LIMIT 1
-            `, [level, game_time, confounders ? 1 : 0]);
+                    `, [level, game_time, confounders ? 1 : 0]);
 
             return {
                 maxScore: scoreResult?.score ?? 0,
@@ -403,7 +472,7 @@ export const DatabaseService = {
         }
     },
 
-    async getRandomPuzzle(userRating: number, band: string = 'All', theme: string = 'all') {
+    async getRandomPuzzle(userRating: number, band: string = 'All', theme: string = 'all', mode: 'standard' | 'blindfold' | 'deep' = 'standard') {
         if (!this.db) await this.init();
 
         try {
@@ -432,23 +501,34 @@ export const DatabaseService = {
             minRating = Math.max(0, minRating);
             maxRating = Math.min(3500, maxRating);
 
+            // Select Source Table and History Table
+            const useLongDb = mode === 'deep';
+            const puzzlesTable = useLongDb ? 'long.puzzles' : 'puzzles';
+            const historyTable = useLongDb ? 'deep_games' : 'puzzles_games';
+
             // Base conditions: Rating Range AND Not Won
-            let whereClause = `Rating BETWEEN ? AND ? AND PuzzleId NOT IN (SELECT puzzle_id FROM user_progress WHERE status = 'win')`;
+            let whereClause = `Rating BETWEEN ? AND ? AND PuzzleId NOT IN (SELECT puzzle_id FROM ${historyTable} WHERE status = 'win')`;
             let params: any[] = [minRating, maxRating];
 
             // Theme Filter
             if (theme && theme !== 'all') {
-                // IMPORTANT: Ensure 'theme' is safe/valid. 
-                // Since this comes from UI enum, it matches column name 'has_{theme}'
                 whereClause += ` AND has_${theme} = 1`;
             }
 
-            let query = `SELECT * FROM puzzles WHERE ${whereClause} ORDER BY RANDOM() LIMIT 1`;
+            let query = `SELECT * FROM ${puzzlesTable} WHERE ${whereClause} ORDER BY RANDOM() LIMIT 1`;
 
             if (band === 'Favorites') {
-                // Favorites logic ignores theme for now (or could support it?)
-                // Returning raw favorites is safer for "Review" mode
-                query = `SELECT * FROM puzzles JOIN user_favorites ON puzzles.PuzzleId = user_favorites.puzzle_id ORDER BY RANDOM() LIMIT 1`;
+                if (useLongDb) {
+                    query = `SELECT * FROM long.puzzles 
+                              JOIN main.user_favorites ON long.puzzles.PuzzleId = main.user_favorites.puzzle_id 
+                              WHERE main.user_favorites.mode = 'deep' 
+                              ORDER BY RANDOM() LIMIT 1`;
+                } else {
+                    query = `SELECT * FROM puzzles 
+                              JOIN user_favorites ON puzzles.PuzzleId = user_favorites.puzzle_id 
+                              WHERE user_favorites.mode IN ('standard', 'blindfold') 
+                              ORDER BY RANDOM() LIMIT 1`;
+                }
                 params = [];
             }
 
@@ -472,7 +552,7 @@ export const DatabaseService = {
     async getPlayerStats(mode: string = 'standard') {
         if (!this.db) await this.init();
         const result = await this.db!.getFirstAsync<any>(
-            `SELECT * FROM player_stats WHERE mode = ?`,
+            `SELECT * FROM player_stats WHERE mode = ? `,
             [mode]
         );
         if (result) {
@@ -488,31 +568,38 @@ export const DatabaseService = {
     async updatePlayerStats(mode: string, rating: number, rd: number, vol: number) {
         if (!this.db) await this.init();
         await this.db!.runAsync(
-            `INSERT OR REPLACE INTO player_stats (mode, rating, rd, vol, last_active) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+            `INSERT OR REPLACE INTO player_stats(mode, rating, rd, vol, last_active) VALUES(?, ?, ?, ?, CURRENT_TIMESTAMP)`,
             [mode, rating, rd, vol]
         );
     },
 
-    async recordResult(puzzleId: string, success: boolean, newRating?: number) {
+    async recordResult(puzzleId: string, success: boolean, newRating?: number, mode: 'standard' | 'blindfold' | 'deep' = 'standard') {
         if (!this.db) await this.init();
+
+        // Decide table based on mode? 
+        // User said: "puzzles_games" (rename of user_progress) is for standard/blindfold presumably?
+        // And "deep_games" for deep.
+
+        const table = mode === 'deep' ? 'deep_games' : 'puzzles_games';
+
         await this.db!.runAsync(
-            `INSERT OR REPLACE INTO user_progress (puzzle_id, status) VALUES (?, ?)`,
+            `INSERT OR REPLACE INTO ${table} (puzzle_id, status) VALUES(?, ?)`,
             [puzzleId, success ? 'win' : 'loss']
         );
     },
 
-    async toggleFavorite(puzzleId: string) {
+    async toggleFavorite(puzzleId: string, mode: 'standard' | 'blindfold' | 'deep' = 'standard') {
         if (!this.db) await this.init();
         const exists = await this.db!.getFirstAsync<{ puzzle_id: string }>(
-            `SELECT puzzle_id FROM user_favorites WHERE puzzle_id = ?`,
+            `SELECT puzzle_id FROM user_favorites WHERE puzzle_id = ? `,
             [puzzleId]
         );
 
         if (exists) {
-            await this.db!.runAsync(`DELETE FROM user_favorites WHERE puzzle_id = ?`, [puzzleId]);
+            await this.db!.runAsync(`DELETE FROM user_favorites WHERE puzzle_id = ? `, [puzzleId]);
             return false;
         } else {
-            await this.db!.runAsync(`INSERT INTO user_favorites (puzzle_id) VALUES (?)`, [puzzleId]);
+            await this.db!.runAsync(`INSERT INTO user_favorites(puzzle_id, mode) VALUES(?, ?)`, [puzzleId, mode]);
             return true;
         }
     },
@@ -520,20 +607,48 @@ export const DatabaseService = {
     async checkFavorite(puzzleId: string) {
         if (!this.db) await this.init();
         const result = await this.db!.getFirstAsync<{ puzzle_id: string }>(
-            `SELECT puzzle_id FROM user_favorites WHERE puzzle_id = ?`,
+            `SELECT puzzle_id FROM user_favorites WHERE puzzle_id = ? `,
             [puzzleId]
         );
         return !!result;
     },
 
-    async resetAllStats() {
+    async resetAllStats(mode: 'puzzles' | 'deep' = 'puzzles') {
         if (!this.db) await this.init();
-        // Reset both modes to 1200
-        await this.db!.runAsync(`INSERT OR REPLACE INTO player_stats (mode, rating, rd, vol, last_active) VALUES ('standard', 1200, 350, 0.06, CURRENT_TIMESTAMP)`);
-        await this.db!.runAsync(`INSERT OR REPLACE INTO player_stats (mode, rating, rd, vol, last_active) VALUES ('blindfold', 1200, 350, 0.06, CURRENT_TIMESTAMP)`);
-        // Clear history and favorites
-        await this.db!.runAsync(`DELETE FROM user_progress`);
-        await this.db!.runAsync(`DELETE FROM user_favorites`);
+
+        if (mode === 'puzzles') {
+            // Reset both standard and blindfold modes to 1200
+            await this.db!.runAsync(`INSERT OR REPLACE INTO player_stats(mode, rating, rd, vol, last_active) VALUES('standard', 1200, 350, 0.06, CURRENT_TIMESTAMP)`);
+            await this.db!.runAsync(`INSERT OR REPLACE INTO player_stats(mode, rating, rd, vol, last_active) VALUES('blindfold', 1200, 350, 0.06, CURRENT_TIMESTAMP)`);
+            // Clear history (puzzles_games)
+            await this.db!.runAsync(`DELETE FROM puzzles_games`);
+            // Clear favorites (standard/blindfold)
+            await this.db!.runAsync(`DELETE FROM user_favorites WHERE mode IN('standard', 'blindfold')`);
+            console.log("Puzzles stats reset.");
+        } else if (mode === 'deep') {
+            // Reset Deep mode
+            await this.db!.runAsync(`INSERT OR REPLACE INTO player_stats(mode, rating, rd, vol, last_active) VALUES('deep', 1200, 350, 0.06, CURRENT_TIMESTAMP)`);
+            // Clear deep games
+            await this.db!.runAsync(`DELETE FROM deep_games`);
+            // Clear deep favorites
+            await this.db!.runAsync(`DELETE FROM user_favorites WHERE mode = 'deep'`);
+            console.log("Deep stats reset.");
+        }
+    },
+
+    /**
+     * Helper to get count of puzzles available in the source DB (short vs long)
+     */
+    async getAvailablePuzzleCount(mode: 'standard' | 'deep') {
+        if (!this.db) await this.init();
+        try {
+            const table = mode === 'deep' ? 'long.puzzles' : 'puzzles';
+            const res = await this.db!.getFirstAsync<{ count: number }>(`SELECT COUNT(*) as count FROM ${table} `);
+            return res?.count || 0;
+        } catch (e) {
+            console.error("Count failed", e);
+            return 0;
+        }
     },
 
     async mergeDLC(localUri: string) {

@@ -1,91 +1,104 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Modal, Pressable, ScrollView } from 'react-native';
-import { X, Lock, Play } from 'lucide-react-native';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import React from 'react';
+import { StyleSheet, View, Text, Modal, Pressable, Alert } from 'react-native';
+import { X, Layers, Lock } from 'lucide-react-native';
 
 interface DepthSelectorModalProps {
     visible: boolean;
     onClose: () => void;
     currentDepth: number;
     onSelectDepth: (depth: number) => void;
+    isPremium: boolean;
+    onPurchase: () => void;
 }
 
-export default function DepthSelectorModal({ visible, onClose, currentDepth, onSelectDepth }: DepthSelectorModalProps) {
-    const [maxDepth, setMaxDepth] = useState(2); // Default unlocked: 1 & 2
+export default function DepthSelectorModal({
+    visible,
+    onClose,
+    currentDepth,
+    onSelectDepth,
+    isPremium,
+    onPurchase
+}: DepthSelectorModalProps) {
 
-    useEffect(() => {
-        if (visible) {
-            checkUnlocks();
+    const depths = Array.from({ length: 9 }, (_, i) => i + 1);
+
+    const handleSelect = (depth: number) => {
+        // Lock levels 3-9 if not premium (Only 1 and 2 are unlocked)
+        if (depth >= 3 && !isPremium) {
+            Alert.alert(
+                "Unlock Deep Mastery",
+                "Upgrade to unlock Depth levels 3-9 and remove ads!",
+                [
+                    { text: "Cancel", style: "cancel" },
+                    {
+                        text: "Go to Store",
+                        onPress: () => {
+                            onPurchase();
+                        }
+                    }
+                ]
+            );
+            return;
         }
-    }, [visible]);
-
-    const checkUnlocks = async () => {
-        try {
-            const storedMax = await AsyncStorage.getItem('deep_max_depth');
-            if (storedMax) {
-                setMaxDepth(parseInt(storedMax));
-            } else {
-                setMaxDepth(2);
-            }
-        } catch (e) { console.error(e); }
+        onSelectDepth(depth);
+        onClose();
     };
-
-    const depths = [1, 2, 3, 4, 5, 6, 7, 8, 9];
 
     return (
         <Modal
-            visible={visible}
+            animationType="slide"
             transparent={true}
-            animationType="fade"
+            visible={visible}
             onRequestClose={onClose}
+            statusBarTranslucent={true}
         >
             <View style={styles.modalOverlay}>
                 <View style={styles.modalContent}>
                     <View style={styles.header}>
-                        <Text style={styles.title}>Select Depth</Text>
-                        <Pressable onPress={onClose} style={styles.closeButton}>
-                            <X color="#ccc" size={24} />
+                        <View style={styles.headerTitle}>
+                            <Layers color="#fff" size={20} />
+                            <Text style={styles.title}>Select Depth</Text>
+                        </View>
+                        <Pressable onPress={onClose}>
+                            <X color="#aaa" size={24} />
                         </Pressable>
                     </View>
 
-                    <ScrollView contentContainerStyle={styles.grid}>
+                    <View style={styles.grid}>
                         {depths.map(depth => {
-                            const isLocked = depth > maxDepth;
-                            const isSelected = currentDepth === depth;
+                            const isActive = currentDepth === depth;
+
+                            // Lock levels 3-9
+                            const isLocked = depth >= 3 && !isPremium;
+                            const labelColor = isActive ? '#fff' : '#888';
 
                             return (
                                 <Pressable
                                     key={depth}
                                     style={[
-                                        styles.levelButton,
-                                        isLocked && styles.levelButtonLocked,
-                                        isSelected && styles.levelButtonActive
+                                        styles.option,
+                                        isActive && styles.optionActive,
+                                        isLocked && styles.optionLocked
                                     ]}
-                                    onPress={() => {
-                                        if (!isLocked) {
-                                            onSelectDepth(depth);
-                                        }
-                                    }}
+                                    onPress={() => handleSelect(depth)}
                                 >
-                                    {isLocked ? (
-                                        <Lock color="#555" size={24} />
-                                    ) : (
-                                        <Text style={[
-                                            styles.levelText,
-                                            isSelected && styles.levelTextActive
-                                        ]}>{depth}</Text>
+                                    {isLocked && (
+                                        <View style={styles.lockIcon}>
+                                            <Lock color="#666" size={16} />
+                                        </View>
                                     )}
-                                    {isSelected && !isLocked && (
-                                        <View style={styles.activeIndicator} />
-                                    )}
+                                    <Text style={[
+                                        styles.optionText,
+                                        isActive && styles.optionTextActive,
+                                        isLocked && styles.optionTextLocked
+                                    ]}>
+                                        {depth === 9 ? '9+' : depth}
+                                    </Text>
+                                    {/* Removed Rank Labels as requested */}
                                 </Pressable>
                             );
                         })}
-                    </ScrollView>
-
-                    <Text style={styles.footerText}>
-                        {maxDepth < 9 ? "Solve more puzzles to unlock deeper calculation levels." : "You have unlocked all levels!"}
-                    </Text>
+                    </View>
                 </View>
             </View>
         </Modal>
@@ -93,96 +106,76 @@ export default function DepthSelectorModal({ visible, onClose, currentDepth, onS
 }
 
 const styles = StyleSheet.create({
+    // ... (unchanged part of modalOverlay, modalContent, header...)
     modalOverlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.8)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'flex-end',
     },
     modalContent: {
-        width: '100%',
-        maxWidth: 400,
-        backgroundColor: '#1E1E1E',
-        borderRadius: 20,
-        padding: 24,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#333',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 10 },
-        shadowOpacity: 0.5,
-        shadowRadius: 20,
-        elevation: 10
+        backgroundColor: '#1a1a1a',
+        borderTopLeftRadius: 20,
+        borderTopRightRadius: 20,
+        padding: 20,
+        minHeight: 400
     },
     header: {
         flexDirection: 'row',
-        width: '100%',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 30
+        marginBottom: 20,
+    },
+    headerTitle: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
     },
     title: {
         color: '#fff',
-        fontSize: 24,
+        fontSize: 20,
         fontWeight: 'bold',
-        letterSpacing: 1
-    },
-    closeButton: {
-        padding: 8,
-        borderRadius: 20,
-        backgroundColor: '#333'
     },
     grid: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        justifyContent: 'center',
-        gap: 15,
-        marginBottom: 20
+        gap: 10,
+        justifyContent: 'center'
     },
-    levelButton: {
-        width: 80,
-        height: 80,
-        backgroundColor: '#2C3E50',
-        borderRadius: 16,
-        justifyContent: 'center',
+    option: {
+        width: '30%',
+        aspectRatio: 1,
+        backgroundColor: '#333',
+        borderRadius: 12,
         alignItems: 'center',
-        borderWidth: 2,
-        borderColor: '#34495E',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#444',
     },
-    levelButtonLocked: {
-        backgroundColor: '#1a1a1a',
-        borderColor: '#222',
-    },
-    levelButtonActive: {
+    optionActive: {
         backgroundColor: '#2980b9',
         borderColor: '#3498db',
-        shadowColor: "#3498db",
-        shadowOffset: { width: 0, height: 0 },
-        shadowOpacity: 0.5,
-        shadowRadius: 10,
     },
-    levelText: {
-        color: '#ecf0f1',
+    optionLocked: {
+        opacity: 0.7,
+        backgroundColor: '#222',
+        borderColor: '#333',
+    },
+    optionText: {
+        color: '#ccc',
         fontSize: 32,
         fontWeight: 'bold',
+        includeFontPadding: false,
+        paddingBottom: 20, // Visual adjustment to center text (User requested 16px)
     },
-    levelTextActive: {
+    optionTextActive: {
         color: '#fff',
-        transform: [{ scale: 1.1 }]
     },
-    activeIndicator: {
+    optionTextLocked: {
+        color: '#555',
+    },
+    lockIcon: {
         position: 'absolute',
-        bottom: -5,
-        width: 20,
-        height: 4,
-        backgroundColor: '#fff',
-        borderRadius: 2
-    },
-    footerText: {
-        color: '#888',
-        fontSize: 14,
-        textAlign: 'center',
-        marginTop: 10
+        top: 8,
+        right: 8,
     }
 });

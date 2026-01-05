@@ -150,7 +150,7 @@ export function usePuzzleGame(initialBand: string, initialTheme: string, autoAdv
             console.log(`[loadPuzzle] Mode=${modeRef.current}, Band=${bandRef.current}, Theme=${currentTheme}, Rating=${userRating}`);
 
             // Fetch new puzzle
-            const puzzle = await DatabaseService.getRandomPuzzle(userRating, bandRef.current, currentTheme);
+            const puzzle = await DatabaseService.getRandomPuzzle(userRating, bandRef.current, currentTheme, modeRef.current);
 
             if (!puzzle) {
                 if (!isMounted.current) return;
@@ -446,7 +446,7 @@ export function usePuzzleGame(initialBand: string, initialTheme: string, autoAdv
                     const newStats = updateRating(currentStats, state.puzzleRating, true);
 
                     DatabaseService.updatePlayerStats(currentMode, newStats.rating, newStats.rd, newStats.vol);
-                    DatabaseService.recordResult(state.puzzleId, true, newStats.rating);
+                    DatabaseService.recordResult(state.puzzleId, true, newStats.rating, currentMode);
 
                     setState(prev => ({
                         ...prev,
@@ -474,7 +474,7 @@ export function usePuzzleGame(initialBand: string, initialTheme: string, autoAdv
                 const newStats = updateRating(currentStats, state.puzzleRating, false); // false = loss
 
                 DatabaseService.updatePlayerStats(currentMode, newStats.rating, newStats.rd, newStats.vol);
-                DatabaseService.recordResult(state.puzzleId, false, newStats.rating);
+                DatabaseService.recordResult(state.puzzleId, false, newStats.rating, currentMode);
 
                 setState(prev => ({
                     ...prev,
@@ -523,7 +523,7 @@ export function usePuzzleGame(initialBand: string, initialTheme: string, autoAdv
 
                 // Persist
                 await DatabaseService.updatePlayerStats(currentMode, newStats.rating, newStats.rd, newStats.vol);
-                await DatabaseService.recordResult(state.puzzleId, false, newStats.rating);
+                await DatabaseService.recordResult(state.puzzleId, false, newStats.rating, currentMode);
 
                 setState(prev => ({
                     ...prev,
@@ -702,9 +702,9 @@ export function usePuzzleGame(initialBand: string, initialTheme: string, autoAdv
 
     const toggleFavorite = useCallback(async () => {
         if (!state.puzzleId || state.puzzleId === 'Loading...' || state.puzzleId === '') return;
-        const newStatus = await DatabaseService.toggleFavorite(state.puzzleId);
+        const newStatus = await DatabaseService.toggleFavorite(state.puzzleId, state.mode);
         setState(prev => ({ ...prev, isFavorite: newStatus }));
-    }, [state.puzzleId]);
+    }, [state.puzzleId, state.mode]);
 
     const toggleBlindfold = useCallback(() => {
         setState(prev => {

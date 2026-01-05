@@ -65,29 +65,30 @@ export default function DeepSettingsModal({
                             {autoAdvance ? <CheckSquare color="#2ecc71" size={24} /> : <Square color="#666" size={24} />}
                         </Pressable>
 
-                        <Text style={styles.sectionTitle}>Move Dynamics</Text>
-                        <View style={styles.card}>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
-                                <Clock color="#f1c40f" size={20} style={{ marginRight: 8 }} />
-                                <View>
-                                    <Text style={styles.optionText}>Move Time</Text>
-                                    <Text style={styles.optionSubText}>Time between moves (seconds)</Text>
-                                </View>
+                        <Text style={styles.sectionTitle}>Game Mechanics</Text>
+
+                        {/* Move Time */}
+                        <View style={styles.optionRow}>
+                            <View style={styles.optionLabel}>
+                                <Text style={styles.optionText}>Move Time</Text>
+                                <Text style={styles.optionSubText}>Seconds per move</Text>
                             </View>
-                            <View style={styles.segmentContainer}>
-                                {[1, 2, 3, 4, 5].map(time => (
+                            <View style={styles.segmentedContainer}>
+                                {[0.5, 1, 1.5, 2, 2.5, 3].map((time) => (
                                     <Pressable
                                         key={time}
                                         style={[
-                                            styles.segmentButton,
-                                            moveTime === time && styles.segmentButtonActive
+                                            styles.segmentBtn,
+                                            moveTime === time && styles.segmentBtnActive
                                         ]}
                                         onPress={() => onSetMoveTime(time)}
                                     >
                                         <Text style={[
                                             styles.segmentText,
                                             moveTime === time && styles.segmentTextActive
-                                        ]}>{time}s</Text>
+                                        ]}>
+                                            {time}
+                                        </Text>
                                     </Pressable>
                                 ))}
                             </View>
@@ -183,30 +184,34 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         marginBottom: 10
     },
-    segmentContainer: {
+    segmentedContainer: {
         flexDirection: 'row',
-        backgroundColor: '#333',
+        backgroundColor: '#111',
         borderRadius: 8,
-        padding: 4,
-        justifyContent: 'space-between'
+        padding: 2,
+        height: 40,
+        alignItems: 'center',
+        borderWidth: 1,
+        borderColor: '#444',
+        minWidth: 200 // Ensure enough width for 6 items
     },
-    segmentButton: {
+    segmentBtn: {
         flex: 1,
-        paddingVertical: 8,
+        height: '100%',
+        justifyContent: 'center',
         alignItems: 'center',
         borderRadius: 6,
     },
-    segmentButtonActive: {
-        backgroundColor: '#f1c40f',
+    segmentBtnActive: {
+        backgroundColor: '#3498db',
     },
     segmentText: {
         color: '#888',
-        fontWeight: '600',
-        fontSize: 14
+        fontSize: 12,
+        fontWeight: 'bold'
     },
     segmentTextActive: {
-        color: '#000',
-        fontWeight: 'bold'
+        color: '#fff',
     },
     pieceGrid: {
         flexDirection: 'row',

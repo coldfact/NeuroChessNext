@@ -20,7 +20,7 @@ interface GameState {
     isFavorite?: boolean;
 }
 
-export function useDeepGame(initialDepth: number, autoAdvance: boolean) {
+export function useDeepGame(initialDepth: number, band: string, autoAdvance: boolean) {
     const [game] = useState(() => new Chess());
     const [solutionMoves, setSolutionMoves] = useState<string[]>([]);
     const [moveIndex, setMoveIndex] = useState(-1);
@@ -99,8 +99,9 @@ export function useDeepGame(initialDepth: number, autoAdvance: boolean) {
             // Maybe Depth 1 = Specific rating range? Or just random for now?
             // User said: "Deep reuses many of the same ideas of Puzzles so could simply copy that code". 
             // I'll leave the query as generic 'All' band for now until taught otherwise.
+            // UPDATE: User requested usage of BandSelectorModal, so we MUST use the band parameter.
 
-            const puzzle = await DatabaseService.getRandomPuzzle(userRating, 'All', 'all');
+            const puzzle = await DatabaseService.getRandomPuzzle(userRating, band, 'all', 'deep');
 
             if (!puzzle) {
                 if (!isMounted.current) return;
@@ -220,7 +221,7 @@ export function useDeepGame(initialDepth: number, autoAdvance: boolean) {
                     let currentStats = state.stats.standard || { ...INITIAL_RATING };
                     const newStats = updateRating(currentStats, state.puzzleRating, true);
                     DatabaseService.updatePlayerStats('deep', newStats.rating, newStats.rd, newStats.vol);
-                    DatabaseService.recordResult(state.puzzleId, true, newStats.rating);
+                    DatabaseService.recordResult(state.puzzleId, true, newStats.rating, 'deep');
 
                     setState(prev => ({
                         ...prev,
@@ -238,7 +239,7 @@ export function useDeepGame(initialDepth: number, autoAdvance: boolean) {
                 let currentStats = state.stats.standard || { ...INITIAL_RATING };
                 const newStats = updateRating(currentStats, state.puzzleRating, false);
                 DatabaseService.updatePlayerStats('deep', newStats.rating, newStats.rd, newStats.vol);
-                DatabaseService.recordResult(state.puzzleId, false, newStats.rating);
+                DatabaseService.recordResult(state.puzzleId, false, newStats.rating, 'deep');
 
                 setState(prev => ({
                     ...prev,
@@ -279,7 +280,7 @@ export function useDeepGame(initialDepth: number, autoAdvance: boolean) {
     }, [game, moveIndex, solutionMoves, state.isLoading]);
 
     const resetGameData = useCallback(async () => {
-        await DatabaseService.updatePlayerStats('deep', 1200, 350, 0.06);
+        await DatabaseService.resetAllStats('deep');
         setState(prev => ({
             ...prev,
             userRating: 1200,
@@ -291,7 +292,7 @@ export function useDeepGame(initialDepth: number, autoAdvance: boolean) {
 
     const toggleFavorite = useCallback(async () => {
         if (!state.puzzleId) return;
-        const newStatus = await DatabaseService.toggleFavorite(state.puzzleId);
+        const newStatus = await DatabaseService.toggleFavorite(state.puzzleId, 'deep');
         setState(prev => ({ ...prev, isFavorite: newStatus }));
     }, [state.puzzleId]);
 
