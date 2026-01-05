@@ -72,7 +72,7 @@ export default function StoreScreen() {
     const processRemoveAdsPurchase = async () => {
         Alert.alert(
             "Confirm Purchase",
-            "Remove All Ads for $2.99?\n(Note: Purchasing ANY other item also removes ads!)",
+            "Remove All Ads for $0.99?\n(Note: Purchasing ANY other item also removes ads!)",
             [
                 { text: "Cancel", style: "cancel" },
                 {
@@ -91,7 +91,7 @@ export default function StoreScreen() {
     const processBundlePurchase = async () => {
         Alert.alert(
             "Confirm Purchase",
-            "Get Full Suite Upgrade for $3.99?",
+            "Get Full Suite Upgrade for $6.99?",
             [
                 { text: "Cancel", style: "cancel" },
                 {
@@ -160,7 +160,7 @@ export default function StoreScreen() {
     const processExpansionPurchase = async () => {
         Alert.alert(
             "Confirm Purchase",
-            "Get Expansion Pack for $2.99?\n(Also removes ads!)",
+            "Get Expansion Pack for $1.99?\n(Also removes ads!)",
             [
                 { text: "Cancel", style: "cancel" },
                 {
@@ -272,7 +272,7 @@ export default function StoreScreen() {
                     </View>
                     <View style={styles.compactInfo}>
                         <Text style={[styles.compactTitle, { color: '#f1c40f' }]}>Suite Upgrade</Text>
-                        <Text style={styles.compactDesc}>Unlock Everything: Puzzles, N-Back, Sequences & Remove Ads.</Text>
+                        <Text style={styles.compactDesc}>Unlock Everything: All Games & Remove Ads.</Text>
                     </View>
 
                     <View style={styles.actionBox}>
@@ -283,7 +283,7 @@ export default function StoreScreen() {
                             </View>
                         ) : (
                             <Pressable style={[styles.buyBtn, { backgroundColor: '#f1c40f' }]} onPress={() => handlePurchase('bundle_all')}>
-                                <Text style={[styles.buyBtnText, { color: '#000' }]}>$3.99</Text>
+                                <Text style={[styles.buyBtnText, { color: '#000' }]}>$6.99</Text>
                             </Pressable>
                         )}
                     </View>
@@ -300,7 +300,7 @@ export default function StoreScreen() {
                     </View>
                     <View style={styles.compactInfo}>
                         <Text style={[styles.compactTitle, { color: '#4ECDC4' }]}>Puzzles Expansion</Text>
-                        <Text style={styles.compactDesc}>+9,000 puzzles & Remove Ads.</Text>
+                        <Text style={styles.compactDesc}>70,000 puzzles (from 3,500) & Remove Ads.</Text>
                     </View>
                     <View style={styles.actionBox}>
                         {hasExpansion ? (
@@ -312,7 +312,7 @@ export default function StoreScreen() {
                             <ActivityIndicator size="small" color="#4ECDC4" />
                         ) : (
                             <Pressable style={styles.buyBtn} onPress={() => handlePurchase('puzzles_expansion')}>
-                                <Text style={styles.buyBtnText}>$2.99</Text>
+                                <Text style={styles.buyBtnText}>$1.99</Text>
                             </Pressable>
                         )}
                     </View>
@@ -383,7 +383,7 @@ export default function StoreScreen() {
                             </View>
                         ) : (
                             <Pressable style={[styles.buyBtn, { backgroundColor: '#555' }]} onPress={() => handlePurchase('remove_ads')}>
-                                <Text style={styles.buyBtnText}>$2.99</Text>
+                                <Text style={styles.buyBtnText}>$0.99</Text>
                             </Pressable>
                         )}
                     </View>

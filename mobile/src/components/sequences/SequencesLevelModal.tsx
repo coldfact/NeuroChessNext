@@ -32,7 +32,7 @@ export default function SequencesLevelModal({
                 [
                     { text: "Cancel", style: "cancel" },
                     {
-                        text: "Unlock",
+                        text: "Go to Store",
                         onPress: () => {
                             onPurchase();
                         }
