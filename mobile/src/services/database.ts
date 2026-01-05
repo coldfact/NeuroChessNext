@@ -3,7 +3,6 @@ import * as FileSystem from 'expo-file-system/legacy';
 import { Asset } from 'expo-asset';
 
 const DB_NAME = 'neurochess.db';
-const DB_LONG_NAME = 'neurochess_long.db';
 
 export const DatabaseService = {
     db: null as SQLite.SQLiteDatabase | null,
@@ -32,37 +31,8 @@ export const DatabaseService = {
                 });
             }
 
-            const longDbPath = `${FileSystem.documentDirectory}SQLite/${DB_LONG_NAME}`;
-            /* 
-            // Long DB is now DLC, not bundled.
-            const longFileInfo = await FileSystem.getInfoAsync(longDbPath);
-            if (!longFileInfo.exists) {
-                console.log("Initialize: Copying bundled LONG database...");
-                try {
-                    // const asset = Asset.fromModule(require('../../assets/neurochess_long.db'));
-                    // await asset.downloadAsync();
-                    // await FileSystem.copyAsync({
-                    //     from: asset.localUri || asset.uri,
-                    //     to: longDbPath,
-                    // });
-                } catch (e) {
-                    console.error("Failed to copy long database", e);
-                }
-            }
-            */
-
             // 2. Open Database
             this.db = await SQLite.openDatabaseAsync(DB_NAME);
-
-            // Attach Long Database
-            try {
-                // We need to use raw exec/run for ATTACH? expo-sqlite openDatabaseAsync returns a db object.
-                // Note: The path for ATTACH must be the full filesystem path
-                await this.db.runAsync(`ATTACH DATABASE '${longDbPath}' AS long`);
-                console.log("Attached Long Database");
-            } catch (e) {
-                console.error("Failed to attach long database:", e);
-            }
 
             // 3. Ensure User Tables (if missing from bundle)
             try {
@@ -462,7 +432,7 @@ export const DatabaseService = {
             return {
                 PuzzleId: result.PuzzleId,
                 FEN: result.FEN,
-                Moves: result.Moves.split(' '),
+                Moves: result.Moves.trim().split(/\s+/),
                 Rating: result.Rating,
                 rating_band: result.rating_band || result.Band,
             };
@@ -503,7 +473,7 @@ export const DatabaseService = {
 
             // Select Source Table and History Table
             const useLongDb = mode === 'deep';
-            const puzzlesTable = useLongDb ? 'long.puzzles' : 'puzzles';
+            const puzzlesTable = useLongDb ? 'puzzles_long' : 'puzzles';
             const historyTable = useLongDb ? 'deep_games' : 'puzzles_games';
 
             // Base conditions: Rating Range AND Not Won
@@ -519,9 +489,9 @@ export const DatabaseService = {
 
             if (band === 'Favorites') {
                 if (useLongDb) {
-                    query = `SELECT * FROM long.puzzles 
-                              JOIN main.user_favorites ON long.puzzles.PuzzleId = main.user_favorites.puzzle_id 
-                              WHERE main.user_favorites.mode = 'deep' 
+                    query = `SELECT * FROM puzzles_long
+                              JOIN user_favorites ON puzzles_long.PuzzleId = user_favorites.puzzle_id 
+                              WHERE user_favorites.mode = 'deep' 
                               ORDER BY RANDOM() LIMIT 1`;
                 } else {
                     query = `SELECT * FROM puzzles 
@@ -539,12 +509,101 @@ export const DatabaseService = {
             return {
                 PuzzleId: result.PuzzleId,
                 FEN: result.FEN,
-                Moves: result.Moves.split(' '),
+                Moves: result.Moves.trim().split(/\s+/),
                 Rating: result.Rating,
                 rating_band: result.rating_band || result.Band,
             };
         } catch (error) {
             console.error('Error getting puzzle:', error);
+            return null;
+        }
+    },
+
+    async getDeepPuzzle(userRating: number, band: string, depth: number, theme: string = 'all') {
+        if (!this.db) await this.init();
+
+        try {
+            // 1. Determine Source Table & Logic
+            // User Definition: Depth = Move Count (Full Moves).
+            const useLongDb = depth >= 4;
+            const table = useLongDb ? 'puzzles_long' : 'puzzles';
+            const historyTable = 'deep_games';
+
+            // 2. Rating Range (Standard Logic)
+            let minRating = 0;
+            let maxRating = 3500;
+            if (band && band !== 'All' && band !== 'Favorites') {
+                if (band.includes('+') || band.includes('PLUS')) {
+                    minRating = parseInt(band.replace(/\D/g, ''));
+                } else {
+                    const parts = band.split('-');
+                    if (parts.length === 2) {
+                        minRating = parseInt(parts[0]);
+                        maxRating = parseInt(parts[1]);
+                    }
+                }
+            } else {
+                minRating = userRating - 300;
+                maxRating = userRating + 300;
+            }
+            minRating = Math.max(0, minRating);
+            maxRating = Math.min(3500, maxRating);
+
+            // 3. Construct Query
+            let whereClauses: string[] = [];
+            let params: any[] = [];
+
+            // Rating
+            if (band !== 'Favorites') {
+                whereClauses.push(`Rating BETWEEN ? AND ?`);
+                params.push(minRating, maxRating);
+            }
+
+            // Depth / Move Count Logic
+            if (depth >= 9) {
+                whereClauses.push(`move_count >= 9`);
+            } else {
+                whereClauses.push(`move_count = ?`);
+                params.push(depth);
+            }
+
+            // Theme
+            if (theme && theme !== 'all') {
+                whereClauses.push(`has_${theme} = 1`);
+            }
+
+            // Exclude Won Games (History)
+            whereClauses.push(`PuzzleId NOT IN (SELECT puzzle_id FROM ${historyTable} WHERE status = 'win')`);
+
+            // Favorites Handling
+            let query = '';
+            if (band === 'Favorites') {
+                // Join with favorites
+                query = `SELECT ${table}.* FROM ${table}
+                         JOIN user_favorites ON ${table}.PuzzleId = user_favorites.puzzle_id
+                         WHERE user_favorites.mode = 'deep'
+                         AND ${whereClauses.join(' AND ')}
+                         ORDER BY RANDOM() LIMIT 1`;
+            } else {
+                query = `SELECT * FROM ${table}
+                         WHERE ${whereClauses.join(' AND ')}
+                         ORDER BY RANDOM() LIMIT 1`;
+            }
+
+            const result = await this.db!.getFirstAsync<any>(query, params);
+
+            if (!result) return null;
+
+            return {
+                PuzzleId: result.PuzzleId,
+                FEN: result.FEN,
+                Moves: result.Moves.trim().split(/\s+/),
+                Rating: result.Rating,
+                rating_band: result.rating_band || result.Band,
+            };
+
+        } catch (e) {
+            console.error('[getDeepPuzzle] Error:', e);
             return null;
         }
     },
@@ -642,7 +701,7 @@ export const DatabaseService = {
     async getAvailablePuzzleCount(mode: 'standard' | 'deep') {
         if (!this.db) await this.init();
         try {
-            const table = mode === 'deep' ? 'long.puzzles' : 'puzzles';
+            const table = mode === 'deep' ? 'puzzles_long' : 'puzzles';
             const res = await this.db!.getFirstAsync<{ count: number }>(`SELECT COUNT(*) as count FROM ${table} `);
             return res?.count || 0;
         } catch (e) {
@@ -672,5 +731,34 @@ export const DatabaseService = {
         await this.db!.runAsync(`DETACH DATABASE dlc`);
 
         console.log('[DatabaseService] DLC Merge Complete');
+    },
+
+    async installDeepDLC(localUri: string) {
+        if (!this.db) await this.init();
+
+        console.log('[DatabaseService] Attaching Deep DLC:', localUri);
+
+        // SQLite native expects path without file:// on Android
+        const dbPath = localUri.replace('file://', '');
+
+        try {
+            // 1. ATTACH
+            await this.db!.runAsync(`ATTACH DATABASE '${dbPath}' AS deep_dlc`);
+
+            // 2. MERGE (puzzles_long -> puzzles_long)
+            // We use INSERT OR IGNORE to skip duplicates
+            // Ensure target table matches source. We created puzzles_long in init() matching the structure.
+            await this.db!.runAsync(`INSERT OR IGNORE INTO main.puzzles_long SELECT * FROM deep_dlc.puzzles_long`);
+
+            // 3. DETACH
+            await this.db!.runAsync(`DETACH DATABASE deep_dlc`);
+
+            console.log('[DatabaseService] Deep DLC Install Complete');
+        } catch (e) {
+            console.error('[DatabaseService] Deep DLC Install Failed:', e);
+            // Try to detach just in case it failed mid-way
+            try { await this.db!.runAsync(`DETACH DATABASE deep_dlc`); } catch (_) { }
+            throw e;
+        }
     }
 };

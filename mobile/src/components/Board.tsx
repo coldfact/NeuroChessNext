@@ -1,11 +1,18 @@
 import React, { useState, useMemo } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions, Pressable, Alert } from 'react-native';
+import Svg, { Line, Polygon } from 'react-native-svg';
 import Piece from './Piece';
 import PromotionModal from './PromotionModal';
 import { BoardTheme, PieceSet } from '../constants';
 
 const FILES = ['a', 'b', 'c', 'd', 'e', 'f', 'g', 'h'];
 const RANKS = ['8', '7', '6', '5', '4', '3', '2', '1'];
+
+interface Arrow {
+    from: string;
+    to: string;
+    color?: string;
+}
 
 interface BoardProps {
     fen: string;
@@ -15,11 +22,13 @@ interface BoardProps {
     pieceSet: PieceSet;
     blindfold?: boolean;
     theme: BoardTheme;
-    disabled?: boolean; // Block moves during blindfold countdown
+    disabled?: boolean;
+    arrows?: Arrow[];
+    deepInput?: boolean;
 }
 
 export default function Board({
-    fen, orientation, onMove, highlights, pieceSet, blindfold, theme, disabled
+    fen, orientation, onMove, highlights, pieceSet, blindfold, theme, disabled, arrows = [], deepInput = false
 }: BoardProps) {
     const { width } = useWindowDimensions();
     const boardSize = Math.min(width - 32, 400); // Max width constraint
@@ -53,10 +62,40 @@ export default function Board({
     const files = orientation === 'white' ? FILES : [...FILES].reverse();
     const ranks = orientation === 'white' ? RANKS : [...RANKS].reverse();
 
+    const getSquareCenter = (square: string) => {
+        const file = square[0];
+        const rank = square[1];
+        const col = files.indexOf(file);
+        const row = ranks.indexOf(rank);
+        return {
+            x: (col + 0.5) * squareSize,
+            y: (row + 0.5) * squareSize
+        };
+    };
+
     const handleSquarePress = (square: string) => {
         // Block moves when disabled (during blindfold countdown)
         if (disabled) {
             Alert.alert('Wait!', 'Memorize the position first!', [{ text: 'OK' }]);
+            return;
+        }
+
+        // Deep Input Mode: Allow clicking ANY square
+        if (deepInput) {
+            if (selectedSquare) {
+                if (square === selectedSquare) {
+                    setSelectedSquare(null);
+                } else {
+                    // Check promotion for Deep Mode?
+                    // Usually Deep Mode is about calculation.
+                    // If a pawn moves to last rank, we might need promotion.
+                    // But for simplicity in V1, let's assume auto-queen or ask.
+                    onMove(selectedSquare, square);
+                    setSelectedSquare(null);
+                }
+            } else {
+                setSelectedSquare(square);
+            }
             return;
         }
 
@@ -151,6 +190,49 @@ export default function Board({
                     })}
                 </View>
             ))}
+
+            {/* Arrow Overlay */}
+            <View style={StyleSheet.absoluteFill} pointerEvents="none">
+                <Svg height={boardSize} width={boardSize}>
+                    {arrows.map((arrow, i) => {
+                        const start = getSquareCenter(arrow.from);
+                        const end = getSquareCenter(arrow.to);
+                        const color = arrow.color || '#e74c3c'; // Default Red
+                        // Calculate angle for arrowhead
+                        const angle = Math.atan2(end.y - start.y, end.x - start.x);
+                        // Arrowhead points
+                        const headLen = squareSize * 0.4;
+                        const x1 = end.x - headLen * Math.cos(angle - Math.PI / 6);
+                        const y1 = end.y - headLen * Math.sin(angle - Math.PI / 6);
+                        const x2 = end.x - headLen * Math.cos(angle + Math.PI / 6);
+                        const y2 = end.y - headLen * Math.sin(angle + Math.PI / 6);
+
+                        // Shorten line so it doesn't stick out of arrowhead
+                        const shortenLen = headLen * 0.7;
+                        const lineEndX = end.x - shortenLen * Math.cos(angle);
+                        const lineEndY = end.y - shortenLen * Math.sin(angle);
+
+                        return (
+                            <React.Fragment key={i}>
+                                <Line
+                                    x1={start.x}
+                                    y1={start.y}
+                                    x2={lineEndX}
+                                    y2={lineEndY}
+                                    stroke={color}
+                                    strokeWidth={squareSize * 0.15}
+                                    opacity={0.8}
+                                />
+                                <Polygon
+                                    points={`${end.x},${end.y} ${x1},${y1} ${x2},${y2}`}
+                                    fill={color}
+                                    opacity={0.8}
+                                />
+                            </React.Fragment>
+                        );
+                    })}
+                </Svg>
+            </View>
 
             {/* Promotion Modal */}
             <PromotionModal

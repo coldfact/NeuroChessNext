@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Chess } from 'chess.js';
+import { Chess, Move } from 'chess.js';
 import { DatabaseService, soundService } from '../services';
 import { updateRating, Rating, INITIAL_RATING } from '../engine/glicko';
 
@@ -9,7 +9,7 @@ interface GameState {
     puzzleId: string;
     puzzleRating: number;
     userRating: number;
-    stats: { standard?: Rating };
+    stats: { deep?: Rating };
     fen: string;
     orientation: 'white' | 'black';
     status: { message: string; color: string };
@@ -18,12 +18,22 @@ interface GameState {
     statsLoaded: boolean;
     ratingApplied?: boolean;
     isFavorite?: boolean;
+    phase: 'visualizing' | 'input' | 'feedback';
+    arrows: Array<{ from: string, to: string, color?: string }>;
+    deepInput: boolean;
+    sanMoves: string[];
+    visualizationIndex: number;
 }
 
 export function useDeepGame(initialDepth: number, band: string, autoAdvance: boolean) {
     const [game] = useState(() => new Chess());
+    const [logicGame] = useState(() => new Chess()); // Used for visualization logic
+
     const [solutionMoves, setSolutionMoves] = useState<string[]>([]);
-    const [moveIndex, setMoveIndex] = useState(-1);
+    const [moveIndex, setMoveIndex] = useState(-1); // -1 = Start Position.
+    // In Deep Mode, moveIndex tracks the VISUAL BOARD state after the puzzle is solved.
+    // Before solve, board is static at StartFEN.
+
     const [state, setState] = useState<GameState>({
         puzzleId: 'Loading...',
         puzzleRating: 0,
@@ -36,31 +46,39 @@ export function useDeepGame(initialDepth: number, band: string, autoAdvance: boo
         isLoading: true,
         statsLoaded: false,
         ratingApplied: false,
-        isFavorite: false
+        isFavorite: false,
+        phase: 'visualizing',
+        arrows: [],
+        deepInput: false,
+        sanMoves: [],
+        visualizationIndex: -1
     });
 
     const userRatingRef = useRef(1200);
-    const puzzleFenRef = useRef('');
     const depthRef = useRef(initialDepth);
     const isMounted = useRef(true);
+    const visualizationTimeout = useRef<NodeJS.Timeout | null>(null);
+    const arrowColorRef = useRef('#ff0000'); // Default Red
 
     // Deep Specific State
-    const [moveTime, setMoveTime] = useState(3); // Default 3s
-    const [showMoves, setShowMoves] = useState(true); // Default to showing moves
+    const [moveTime, setMoveTime] = useState(3);
+    const [showMoves, setShowMoves] = useState(true);
 
-    // Sync refs
-    depthRef.current = initialDepth;
+    // Sync ref
+    useEffect(() => {
+        depthRef.current = initialDepth;
+    }, [initialDepth]);
 
     useEffect(() => {
-        return () => { isMounted.current = false; };
+        return () => {
+            isMounted.current = false;
+            if (visualizationTimeout.current) clearTimeout(visualizationTimeout.current);
+        };
     }, []);
 
     // Load Stats
     useEffect(() => {
         const loadStats = async () => {
-            const stats = await DatabaseService.getPlayerStats('deep_custom'); // New category? Or reuse standard? Using 'deep_custom' for now or 'standard' if user wants shared rating. 
-            // User said: "The rating modal will stay the same ... user likewise will start at 1200 for this game"
-            // Let's use a new category 'deep' to keep it separate from Puzzles.
             const deepStats = await DatabaseService.getPlayerStats('deep');
 
             if (!isMounted.current) return;
@@ -71,7 +89,7 @@ export function useDeepGame(initialDepth: number, band: string, autoAdvance: boo
                 return {
                     ...prev,
                     userRating: initialRating,
-                    stats: { standard: deepStats || undefined },
+                    stats: { deep: deepStats || undefined },
                     statsLoaded: true
                 };
             });
@@ -81,27 +99,104 @@ export function useDeepGame(initialDepth: number, band: string, autoAdvance: boo
         loadStats();
     }, []);
 
+    // Auto-Start
+    useEffect(() => {
+        if (state.statsLoaded) {
+            loadPuzzle();
+        }
+    }, [state.statsLoaded, initialDepth, band]);
+
+    const setArrowColor = useCallback((color: string) => {
+        arrowColorRef.current = color;
+    }, []);
+
+    const startVisualization = useCallback((moves: string[], startFen: string, currentMoveTime: number) => {
+        try {
+            logicGame.load(startFen);
+        } catch (e) { console.error("Invalid FEN", e); return; }
+
+        if (visualizationTimeout.current) clearTimeout(visualizationTimeout.current);
+
+        let moveIdx = 0;
+        const lastVisualizedIndex = moves.length - 2;
+
+        if (moves.length === 0) {
+            setState(prev => ({
+                ...prev,
+                phase: 'input',
+                deepInput: true,
+                status: { message: 'What is the move?', color: '#fff' },
+                arrows: []
+            }));
+            return;
+        }
+
+        const step = () => {
+            if (!isMounted.current) return;
+
+            // CAPTURE VALUE to avoid closure trap with setState
+            const currentIdx = moveIdx;
+
+            if (currentIdx > lastVisualizedIndex) {
+                // Done visualizing
+                setState(prev => ({
+                    ...prev,
+                    phase: 'input',
+                    deepInput: true,
+                    status: { message: 'What is the NEXT move?', color: '#fff' },
+                    arrows: []
+                }));
+                return;
+            }
+
+            const moveStr = moves[currentIdx];
+            const from = moveStr.slice(0, 2);
+            const to = moveStr.slice(2, 4);
+
+            // Show Arrow with User Preference
+            setState(prev => ({
+                ...prev,
+                phase: 'visualizing',
+                deepInput: false,
+                status: { message: `Watch move ${currentIdx + 1}/${moves.length}`, color: '#aaa' },
+                arrows: [{ from, to, color: arrowColorRef.current }], // Dynamic Color
+                visualizationIndex: currentIdx // Update Grid
+            }));
+
+            soundService.playMoveSound(false);
+
+            moveIdx++;
+            visualizationTimeout.current = setTimeout(step, currentMoveTime * 1000);
+        };
+
+        step();
+
+    }, [logicGame]);
+
     const loadPuzzle = useCallback(async () => {
         if (isLoadingGlobal) return;
         isLoadingGlobal = true;
 
+        if (visualizationTimeout.current) clearTimeout(visualizationTimeout.current);
+
+        setMoveIndex(-1); // Reset Move Index
+
         setState(prev => ({
             ...prev,
             isLoading: true,
-            status: { message: 'Loading...', color: '#888' }
+            status: { message: 'Loading...', color: '#888' },
+            arrows: [],
+            deepInput: false,
+            phase: 'visualizing',
+            sanMoves: [],
+            visualizationIndex: -1
         }));
 
         try {
             const userRating = userRatingRef.current || 1200;
-            // NOTE: Deep might use different criteria than Band/Theme. 
-            // For now, using standard getRandomPuzzle but ignoring band/theme arguments or mapped from Depth?
-            // "Themes will be replaced by a Depth icon". 
-            // Maybe Depth 1 = Specific rating range? Or just random for now?
-            // User said: "Deep reuses many of the same ideas of Puzzles so could simply copy that code". 
-            // I'll leave the query as generic 'All' band for now until taught otherwise.
-            // UPDATE: User requested usage of BandSelectorModal, so we MUST use the band parameter.
+            const currentDepth = depthRef.current;
 
-            const puzzle = await DatabaseService.getRandomPuzzle(userRating, band, 'all', 'deep');
+            const puzzle = await DatabaseService.getDeepPuzzle(userRating, band, currentDepth);
 
             if (!puzzle) {
                 if (!isMounted.current) return;
@@ -119,43 +214,56 @@ export function useDeepGame(initialDepth: number, band: string, autoAdvance: boo
 
             if (isMounted.current) {
                 game.load(puzzle.FEN);
-                puzzleFenRef.current = puzzle.FEN;
-                setSolutionMoves(puzzle.Moves);
-                setMoveIndex(-1);
+
+                // Determine Orientation based on who plays the LAST move (User's move)
+                // If moves.length is Odd, User plays same side as Start FEN.
+                // If moves.length is Even, User plays opposite side.
+                // puzzle.FEN is Start Position. 
+                // game.turn() gives FEN turn.
+                const startTurn = game.turn(); // 'w' or 'b'
+                const moves = puzzle.Moves;
+                const totalPly = moves.length;
+                const isStartSideMove = (totalPly % 2 !== 0);
+                const userSide = isStartSideMove ? startTurn : (startTurn === 'w' ? 'b' : 'w');
+                const newOrientation = userSide === 'w' ? 'white' : 'black';
+
+                // Calculate SAN Moves
+                const calculatedSanMoves: string[] = [];
+                const tempGame = new Chess(puzzle.FEN);
+                try {
+                    for (const m of moves) {
+                        const from = m.slice(0, 2);
+                        const to = m.slice(2, 4);
+                        const promotion = m.length > 4 ? m[4] : undefined;
+                        const result = tempGame.move({ from, to, promotion: promotion as any || 'q' });
+                        if (result) calculatedSanMoves.push(result.san);
+                        else calculatedSanMoves.push(m); // Fallback
+                    }
+                } catch (e) { console.warn("SAN Calc Error", e); }
+
+                setSolutionMoves(moves);
+
                 setState(prev => ({
                     ...prev,
                     puzzleId: puzzle.PuzzleId,
                     fen: puzzle.FEN,
                     puzzleRating: puzzle.Rating,
-                    orientation: game.turn() === 'w' ? 'black' : 'white',
-                    status: { message: 'Your move...', color: '#fff' },
+                    orientation: newOrientation,
+                    status: { message: 'Memorize...', color: '#fff' },
                     highlights: {},
                     isLoading: false,
                     ratingApplied: false,
-                    isFavorite: isFav
+                    isFavorite: isFav,
+                    arrows: [],
+                    phase: 'visualizing',
+                    deepInput: false,
+                    sanMoves: calculatedSanMoves,
+                    visualizationIndex: -1
                 }));
 
-                // Auto-play first move (opponent)
-                if (puzzle.Moves.length > 0) {
-                    setTimeout(() => {
-                        if (!isMounted.current) return;
-                        try {
-                            const firstMove = puzzle.Moves[0];
-                            const from = firstMove.slice(0, 2);
-                            const to = firstMove.slice(2, 4);
-                            const promotion = firstMove.length > 4 ? firstMove[4] : undefined;
-                            game.move({ from, to, promotion });
-                            soundService.playMoveSound(!!game.history({ verbose: true }).slice(-1)[0]?.captured);
-                            setMoveIndex(0);
-                            setState(prev => ({
-                                ...prev,
-                                fen: game.fen(),
-                                highlights: { from, to },
-                                status: { message: 'Your move...', color: '#eee' },
-                            }));
-                        } catch (e) { console.error(e); }
-                    }, 500);
-                }
+                setTimeout(() => {
+                    startVisualization(moves, puzzle.FEN, moveTime);
+                }, 1000);
             }
         } catch (e) {
             console.error("Load Puzzle Error", e);
@@ -163,80 +271,89 @@ export function useDeepGame(initialDepth: number, band: string, autoAdvance: boo
         } finally {
             isLoadingGlobal = false;
         }
-    }, [game]);
+    }, [game, band, moveTime, startVisualization]);
 
     const nextPuzzle = useCallback(() => loadPuzzle(), [loadPuzzle]);
 
-    const handleMove = useCallback((from: string, to: string, promotion?: string) => {
-        const expectedIndex = moveIndex + 1;
-        const expectedMove = solutionMoves[expectedIndex];
-        const moveAttempt = from + to + (promotion || '');
+    const applyFinalState = useCallback((moves: string[], solved: boolean) => {
+        // Replay all moves on GAME instance to show final state
+        try {
+            // Reset game to start FEN (already loaded but safe to ensure)
+            // game.load(state.fen?? No, state.fen matches game.fen so just use current game)
+            // Actually, game is currently at StartFEN.
 
-        let isCorrect = false;
-        if (expectedMove) {
-            // Simple check, taking promotion into account if strictly needed or just from/to
-            if (expectedMove.length > 4) isCorrect = moveAttempt === expectedMove;
-            else isCorrect = (from + to) === expectedMove;
-        }
+            // Loop through ALL solution moves
+            for (const moveStr of moves) {
+                const form = moveStr.slice(0, 2);
+                const to = moveStr.slice(2, 4);
+                const promotion = moveStr.length > 4 ? moveStr[4] : undefined;
+                game.move({ from: form, to, promotion: promotion as any || 'q' });
+            }
 
-        if (isCorrect) {
-            try { game.move({ from, to, promotion: promotion as any }); } catch (e) { return; }
-            soundService.playMoveSound(!!game.history({ verbose: true }).slice(-1)[0]?.captured);
-            setMoveIndex(expectedIndex);
-
-            const isSolved = expectedIndex + 1 >= solutionMoves.length;
+            const finalFen = game.fen();
+            const finalIndex = moves.length - 1;
+            setMoveIndex(finalIndex); // Moves tracks 0-indexed moves. length-1 is the last index.
 
             setState(prev => ({
                 ...prev,
-                fen: game.fen(),
-                highlights: { from, to },
-                status: {
-                    message: isSolved ? 'Solved!' : 'Correct!',
-                    color: isSolved ? '#f1c40f' : '#2ecc71'
-                },
+                fen: finalFen,
+                phase: 'feedback', // Keep feedback phase
+                deepInput: false,
+                visualizationIndex: finalIndex // Show all moves on solve
+                // Status/Arrows handled by caller
             }));
 
-            if (!isSolved) {
-                // Opponent Response
-                setTimeout(() => {
-                    try {
-                        const opponentMove = solutionMoves[expectedIndex + 1];
-                        const opFrom = opponentMove.slice(0, 2);
-                        const opTo = opponentMove.slice(2, 4);
-                        const opProm = opponentMove.length > 4 ? opponentMove[4] : undefined;
-                        game.move({ from: opFrom, to: opTo, promotion: opProm });
-                        soundService.playMoveSound(!!game.history({ verbose: true }).slice(-1)[0]?.captured);
-                        setMoveIndex(expectedIndex + 1);
-                        setState(prev => ({
-                            ...prev,
-                            fen: game.fen(),
-                            highlights: { from: opFrom, to: opTo },
-                            status: { message: 'Your move...', color: '#eee' },
-                        }));
-                    } catch (e) { }
-                }, moveTime * 1000); // USE MOVE TIME HERE? User said "Analysis Time --> Move Time... 1, 2, 3, 4, 5 seconds between moves"
-            } else {
-                if (!state.ratingApplied) {
-                    // Update Rating
-                    let currentStats = state.stats.standard || { ...INITIAL_RATING };
-                    const newStats = updateRating(currentStats, state.puzzleRating, true);
-                    DatabaseService.updatePlayerStats('deep', newStats.rating, newStats.rd, newStats.vol);
-                    DatabaseService.recordResult(state.puzzleId, true, newStats.rating, 'deep');
+        } catch (e) { console.error("Apply Final State Error", e); }
+    }, [game]);
 
-                    setState(prev => ({
-                        ...prev,
-                        userRating: Math.round(newStats.rating),
-                        ratingApplied: true,
-                        stats: { standard: newStats }
-                    }));
+    const handleMove = useCallback((from: string, to: string) => {
+        if (state.phase !== 'input') return;
 
-                    if (autoAdvance) setTimeout(() => nextPuzzle(), 1500);
-                }
+        const targetMoveStr = solutionMoves[solutionMoves.length - 1];
+        if (!targetMoveStr) return;
+
+        const targetFrom = targetMoveStr.slice(0, 2);
+        const targetTo = targetMoveStr.slice(2, 4);
+
+        const isCorrect = (from === targetFrom && to === targetTo);
+
+        if (isCorrect) {
+            // Apply History & State Update
+            applyFinalState(solutionMoves, true);
+
+            setState(prev => ({
+                ...prev,
+                arrows: [{ from, to, color: '#2ecc71' }], // Green
+                status: { message: 'Solved!', color: '#2ecc71' }
+            }));
+            soundService.playMoveSound(true);
+
+            if (!state.ratingApplied) {
+                let currentStats = state.stats.deep || { ...INITIAL_RATING };
+                const newStats = updateRating(currentStats, state.puzzleRating, true);
+                DatabaseService.updatePlayerStats('deep', newStats.rating, newStats.rd, newStats.vol);
+                DatabaseService.recordResult(state.puzzleId, true, newStats.rating, 'deep');
+
+                setState(prev => ({
+                    ...prev,
+                    userRating: Math.round(newStats.rating),
+                    ratingApplied: true,
+                    stats: { deep: newStats }
+                }));
+
+                if (autoAdvance) setTimeout(() => nextPuzzle(), 3000); // 3s delay to view
             }
         } else {
-            // Wrong
+            // Wrong -> Orange
+            setState(prev => ({
+                ...prev,
+                arrows: [{ from, to, color: '#f39c12' }], // Orange
+                status: { message: 'Wrong!', color: '#f39c12' }
+            }));
+            soundService.playError();
+
             if (!state.ratingApplied) {
-                let currentStats = state.stats.standard || { ...INITIAL_RATING };
+                let currentStats = state.stats.deep || { ...INITIAL_RATING };
                 const newStats = updateRating(currentStats, state.puzzleRating, false);
                 DatabaseService.updatePlayerStats('deep', newStats.rating, newStats.rd, newStats.vol);
                 DatabaseService.recordResult(state.puzzleId, false, newStats.rating, 'deep');
@@ -245,46 +362,75 @@ export function useDeepGame(initialDepth: number, band: string, autoAdvance: boo
                     ...prev,
                     userRating: Math.round(newStats.rating),
                     ratingApplied: true,
-                    stats: { standard: newStats },
-                    status: { message: 'Wrong! Try again.', color: '#e74c3c' }
+                    stats: { deep: newStats }
                 }));
-            } else {
-                setState(prev => ({ ...prev, status: { message: 'Wrong! Try again.', color: '#e74c3c' } }));
             }
-            soundService.playError();
+
+            setTimeout(() => {
+                if (!isMounted.current) return;
+                setState(prev => ({ ...prev, arrows: [] }));
+            }, 1000);
         }
-    }, [game, moveIndex, solutionMoves, state, moveTime, autoAdvance, nextPuzzle]); // Added moveTime dep
+
+    }, [state.phase, state.ratingApplied, state.stats, state.puzzleRating, state.puzzleId, solutionMoves, autoAdvance, nextPuzzle, applyFinalState]);
 
     const giveUp = useCallback(async () => {
-        // Simplified giveUp logic (reveal)
-        setState(prev => ({ ...prev, status: { message: 'Solution Revealed', color: '#e74c3c' } }));
-        // (Rating logic omitted for brevity in scaffolding, assume similar to Puzzles)
-    }, []);
+        if (solutionMoves.length === 0) return;
 
-    // Navigation History (Back/Forward)
+        applyFinalState(solutionMoves, false);
+
+        const targetMoveStr = solutionMoves[solutionMoves.length - 1];
+        const targetFrom = targetMoveStr.slice(0, 2);
+        const targetTo = targetMoveStr.slice(2, 4);
+
+        setState(prev => ({
+            ...prev,
+            arrows: [{ from: targetFrom, to: targetTo, color: '#f39c12' }], // Orange for Give Up
+            status: { message: 'Solution Revealed', color: '#f39c12' }
+        }));
+        soundService.playMoveSound(false);
+    }, [solutionMoves, applyFinalState]);
+
     const navigateHistory = useCallback((direction: 'back' | 'forward') => {
-        if (state.isLoading) return;
-        if (direction === 'back' && moveIndex > -1) {
-            game.undo();
-            setMoveIndex(prev => prev - 1);
-            setState(prev => ({ ...prev, fen: game.fen(), highlights: {} }));
-        } else if (direction === 'forward' && moveIndex < solutionMoves.length - 1) {
+        // Only active if phase is 'feedback' (Solved/GiveUp)
+        if (state.phase !== 'feedback') return;
+
+        if (direction === 'back') {
+            if (moveIndex >= -1) {
+                // To go back, we undo the move at moveIndex
+                // Wait, moveIndex points to the LAST played move.
+                // -1 = Start.
+                // 0 = Move 0 played.
+                if (moveIndex === -1) return; // Can't go back further
+
+                game.undo();
+                setMoveIndex(prev => prev - 1);
+                setState(prev => ({ ...prev, fen: game.fen(), arrows: [] })); // Clear arrows on nav
+                soundService.playMoveSound(false);
+            }
+        } else {
+            // Forward
             const nextIdx = moveIndex + 1;
-            const moveStr = solutionMoves[nextIdx];
-            const from = moveStr.slice(0, 2);
-            const to = moveStr.slice(2, 4);
-            game.move({ from, to, promotion: 'q' });
-            setMoveIndex(nextIdx);
-            setState(prev => ({ ...prev, fen: game.fen(), highlights: { from, to } }));
+            if (nextIdx < solutionMoves.length) {
+                const moveStr = solutionMoves[nextIdx];
+                const from = moveStr.slice(0, 2);
+                const to = moveStr.slice(2, 4);
+                const promotion = moveStr.length > 4 ? moveStr[4] : undefined;
+
+                game.move({ from, to, promotion: promotion as any || 'q' });
+                setMoveIndex(nextIdx);
+                setState(prev => ({ ...prev, fen: game.fen(), arrows: [] }));
+                soundService.playMoveSound(false);
+            }
         }
-    }, [game, moveIndex, solutionMoves, state.isLoading]);
+    }, [game, moveIndex, solutionMoves, state.phase]);
 
     const resetGameData = useCallback(async () => {
         await DatabaseService.resetAllStats('deep');
         setState(prev => ({
             ...prev,
             userRating: 1200,
-            stats: { standard: { rating: 1200, rd: 350, vol: 0.06 } },
+            stats: { deep: { rating: 1200, rd: 350, vol: 0.06 } },
             status: { message: 'Data Reset', color: '#2ecc71' }
         }));
         setTimeout(() => loadPuzzle(), 100);
@@ -306,7 +452,8 @@ export function useDeepGame(initialDepth: number, band: string, autoAdvance: boo
         navigateHistory,
         resetGameData,
         toggleFavorite,
-        canGoBack: moveIndex > -1,
-        canGoForward: moveIndex < solutionMoves.length - 1
+        canGoBack: moveIndex > -1, // -1 is Start
+        canGoForward: moveIndex < solutionMoves.length - 1,
+        setArrowColor,
     };
 }

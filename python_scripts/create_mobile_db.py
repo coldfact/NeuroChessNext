@@ -20,6 +20,10 @@ DEST_DB_DEEP = os.path.join(BASE_DIR, "mobile_deep_extra.sqlite")
 BASE_PER_BAND = 500
 EXTRA_PER_BAND = 9500
 
+# Deep Mode Configuration
+DEEP_BASE_PER_BAND = 2000
+DEEP_EXTRA_PER_BAND = 10000
+
 # Define your custom bands here for easy adjustment
 BANDS = [
     ("0000-0800", 0, 800),
@@ -76,9 +80,9 @@ def create_deep_dlc():
         ''')
 
         # 2. Run Phase A: Best-First per Bucket
-        print("Running Phase A: Top 500 per Move Bucket...")
+        print(f"Running Phase A: Top {DEEP_BASE_PER_BAND} per Move Bucket...")
         # Note: We query 'puzzles' (main) and insert into 'deep_dlc.puzzles_long'
-        phase_a_sql = '''
+        phase_a_sql = f'''
         WITH ranked AS (
           SELECT
             p.*,
@@ -110,19 +114,19 @@ def create_deep_dlc():
           PuzzleId, FEN, Moves, Rating, RatingDeviation, Popularity, NbPlays,
           Themes, GameUrl, OpeningTags, rating_band, move_count
         FROM ranked
-        WHERE rn <= 500
+        WHERE rn <= {DEEP_BASE_PER_BAND}
           AND move_bucket IN ('9+','8','7','6','5','4');
         '''
         conn.execute(phase_a_sql)
         conn.commit()
 
         # 3. Phase B: Top Up to 3000 per Band
-        print("Running Phase B: Top Up to 3000 per Band...")
-        phase_b_sql = '''
+        print(f"Running Phase B: Top Up to {DEEP_EXTRA_PER_BAND} per Band...")
+        phase_b_sql = f'''
         WITH band_need AS (
           SELECT
             rb.rating_band,
-            3000 - COALESCE(pl.cnt, 0) AS need
+            {DEEP_EXTRA_PER_BAND} - COALESCE(pl.cnt, 0) AS need
           FROM (SELECT DISTINCT rating_band FROM main.puzzles) rb
           LEFT JOIN (
             SELECT rating_band, COUNT(*) AS cnt
@@ -130,7 +134,7 @@ def create_deep_dlc():
             GROUP BY rating_band
           ) pl
           ON pl.rating_band = rb.rating_band
-          WHERE (3000 - COALESCE(pl.cnt, 0)) > 0
+          WHERE ({DEEP_EXTRA_PER_BAND} - COALESCE(pl.cnt, 0)) > 0
         ),
         candidates AS (
           SELECT

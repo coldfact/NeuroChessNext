@@ -11,6 +11,7 @@ import DeepBottomToolbar from '../../src/components/deep/DeepBottomToolbar';
 import DeepSettingsModal from '../../src/components/deep/DeepSettingsModal';
 import DepthSelectorModal from '../../src/components/deep/DepthSelectorModal';
 import BandSelectorModal from '../../src/components/BandSelectorModal';
+import MoveGrid from '../../src/components/deep/MoveGrid';
 import { useDeepGame } from '../../src/hooks/useDeepGame';
 import { BoardTheme, BOARD_THEMES, PieceSet, PIECE_SETS } from '../../src/constants';
 import { AdService } from '../../src/services/AdService';
@@ -44,14 +45,9 @@ export default function DeepGameScreen() {
     // Check Premium Status on Focus (in case they just bought it)
     useFocusEffect(
         useCallback(() => {
-            // Check N-Back Premium or Suite as proxy for now? 
-            // Or use a specific 'deep_unlocked' key?
-            // User said: "Unlock begins at 4...". In Sequences it was 'sequences_unlocked'.
-            // Let's use 'deep_unlocked' for now.
-            // AND also check 'suite_owned'
             const checkPremium = async () => {
                 const suite = await AsyncStorage.getItem('suite_owned');
-                const deep = await AsyncStorage.getItem('deep_unlocked');
+                const deep = await AsyncStorage.getItem('dlc_deep_v1');
                 setIsPremium(suite === 'true' || deep === 'true');
             };
             checkPremium();
@@ -63,8 +59,7 @@ export default function DeepGameScreen() {
     // Visual Settings
     const [pieceSet, setPieceSet] = useState<PieceSet>('cburnett');
     const [boardTheme, setBoardTheme] = useState<BoardTheme>(BOARD_THEMES[0]);
-
-
+    const [arrowColor, setArrowColor] = useState('#ff0000');
 
     // UI Modals
     const [settingsVisible, setSettingsVisible] = useState(false);
@@ -74,6 +69,11 @@ export default function DeepGameScreen() {
     // Ad State
     const [showAd, setShowAd] = useState(false);
     const [adShownForCurrentPuzzle, setAdShownForCurrentPuzzle] = useState(false);
+
+    // Sync Arrow Color to Game
+    useEffect(() => {
+        game.setArrowColor(arrowColor);
+    }, [arrowColor, game]);
 
     // Load Visual Settings
     useEffect(() => {
@@ -87,25 +87,34 @@ export default function DeepGameScreen() {
                 if (theme) setBoardTheme(theme);
             }
 
+            const c = await AsyncStorage.getItem('deep_arrow_color');
+            if (c) setArrowColor(c);
+
             const savedMoveTime = await AsyncStorage.getItem('deep_move_time');
             if (savedMoveTime) game.setMoveTime(parseFloat(savedMoveTime));
         })();
     }, []);
+
+    // ... (handlers)
+
+    const handleSetArrowColor = (color: string) => {
+        setArrowColor(color);
+        AsyncStorage.setItem('deep_arrow_color', color);
+    };
+
+    // ... (render)
 
     // Save Handlers
     const handleSetDepth = (d: number) => {
         setDepth(d);
         AsyncStorage.setItem('deep_current_depth', String(d));
         setDepthSelectorVisible(false);
-        // Reload puzzle
-        game.nextPuzzle();
     };
 
     const handleSetBand = (newBand: string) => {
         setBand(newBand);
         AsyncStorage.setItem('deep_band', newBand);
         setBandSelectorVisible(false);
-        game.nextPuzzle();
     };
 
     const handleSetMoveTime = (t: number) => {
@@ -205,53 +214,9 @@ export default function DeepGameScreen() {
                     pieceSet={pieceSet}
                     theme={boardTheme}
                     disabled={game.isLoading}
-                    blindfold={!game.showMoves} // Use blindfold prop to hide/show pieces if that's what "Moves" toggle means? 
-                    // Wait, "Moves" icon is ListOrdered. 
-                    // Does "Visible -> Moves" mean Show/Hide MOVES LIST or PIECES?
-                    // User said: "Footer change 2: replace the Visible toggle with Moves toggle... use this icon list-ordered".
-                    // "Visible" toggle in Puzzles toggles BLINDFOLD (hiding pieces).
-                    // If we replace it with "Moves toggle", it implies showing/hiding the Move List (SAN).
-                    // But usually Deep training involves NOT moving pieces on the board...
-                    // However, "Deep" description: "Follow moves in head, make final move."
-                    // Puzzles are static.
-                    // `useDeepGame` has `showMoves` state.
-                    // If showMoves is TRUE, maybe we show arrows? Or helper?
-                    // Or maybe we show the Move List text?
-                    // But there is no Move List UI component in Puzzles.
-                    // The Puzzles "Visible" toggle hides PIECES.
-                    // If I replace "Visible" with "Moves", maybe it toggles Piece Visibility?
-                    // But the icon is "ListOrdered". That strongly suggests a Move List (1. e4 e5).
-                    // If so, where do we display the moves?
-                    // Or maybe "Moves" toggle means "Show/Hide the MOVES performed so far"?
-                    // Let's assume it controls `blindfold` prop on Board to hide pieces for now as a fallback if not specified, 
-                    // BUT "Visible => Moves" suggests a change in function.
-                    // "Follow moves in head" -> This prevents seeing pieces moves?
-                    // Wait, `useDeepGame` attempts to animate opponent moves. `game.move(...)`.
-                    // If we want to follow in head, maybe the pieces DON'T move on board?
-                    // That would be `showMoves = false`?
-                    // Let's look at `useDeepGame`:
-                    // It does `game.move()` which updates FEN.
-                    // If we want to hide that, we'd need to keep FEN static?
-                    // Or maybe `showMoves` toggles Piece Visibility (Blindfold) so you have to track in head?
-                    // The icon `ListOrdered` is confusing if it means Blindfold. `Eye/EyeOff` is for Blindfold.
-                    // Maybe the USER wants a Move List to appear on screen?
-                    // "Wire up Show/Hide Moves Toggle" was in the todo.
-                    // I will leave `blindfold={!game.showMoves}` for now, effectively using it as a Blindfold toggle but named Moves, 
-                    // UNLESS `ListOrdered` implies seeing the textual history.
-                    // Given "Follow moves in head", seeing the text list is a common helper.
-                    // But if I don't implement a text list, then it does nothing.
-                    // I'll assume it toggles Piece Visibility (Blindfold) for now, as that's what it replaced.
-                    // Wait, User said "replace the Visible toggle with Moves toggle". Visible toggle had Eye/EyeOff.
-                    // If I change icon to ListOrdered, it makes no sense for Blindfold.
-                    // I will unimplemented "Moves" function (no op) or show a placeholder Move List if possible.
-                    // But for now, I'll link it to `blindfold` on Board just to give it SOME effect (Hide Pieces).
-                    // Actually, if "Deep" training is about calculation, maybe you shouldn't see the pieces APART from the start position?
-                    // Let's rely on `useDeepGame` logic.
-                    // I'll pass `blindfold={false}` to Board for now and let `showMoves` do nothing until clarified, OR render a simple move list.
-                    // I'll render a simple Move List overlay if `showMoves` is true? 
-                    // No, standard Deep training usually hides the pieces after start.
-                    // I'll make it toggle Blindfold for now, as that's the safest 'core' mechanic mapped to the previous button.
-                    blindfold={!game.showMoves}
+                    blindfold={false}
+                    arrows={game.arrows}
+                    deepInput={game.deepInput}
                 />
             </View>
 
@@ -267,9 +232,15 @@ export default function DeepGameScreen() {
                 isLoading={game.isLoading}
             />
 
+            <MoveGrid
+                sanMoves={game.sanMoves}
+                currentIndex={game.visualizationIndex}
+                visible={game.showMoves}
+            />
+
             <View style={{ flex: 1 }} />
 
-            {/* ... */}
+            {/* Toolbar */}
             <DeepBottomToolbar
                 band={band}
                 onOpenBandSelector={() => setBandSelectorVisible(true)}
@@ -293,6 +264,8 @@ export default function DeepGameScreen() {
                 onSetMoveTime={handleSetMoveTime}
                 autoAdvance={autoAdvance}
                 onSetAutoAdvance={handleSetAutoAdvance}
+                arrowColor={arrowColor}
+                onSetArrowColor={handleSetArrowColor}
             />
 
             <DepthSelectorModal

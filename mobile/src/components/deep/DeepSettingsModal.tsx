@@ -20,7 +20,18 @@ interface DeepSettingsModalProps {
     onResetProgress: () => void;
     autoAdvance: boolean;
     onSetAutoAdvance: (enabled: boolean) => void;
+
+    arrowColor: string;
+    onSetArrowColor: (color: string) => void;
 }
+
+const ARROW_COLORS = [
+    { name: 'Red', hex: '#ff0000' },
+    { name: 'Violet', hex: '#8A2BE2' },
+    { name: 'Cyan', hex: '#00FFFF' },
+    { name: 'Magenta', hex: '#FF00FF' },
+    { name: 'Yellow', hex: '#FFFF00' },
+];
 
 export default function DeepSettingsModal({
     visible, onClose,
@@ -28,7 +39,8 @@ export default function DeepSettingsModal({
     boardTheme, onSetBoardTheme,
     moveTime, onSetMoveTime,
     onResetProgress,
-    autoAdvance, onSetAutoAdvance
+    autoAdvance, onSetAutoAdvance,
+    arrowColor, onSetArrowColor
 }: DeepSettingsModalProps) {
 
     const handleReset = async () => {
@@ -94,6 +106,26 @@ export default function DeepSettingsModal({
                             </View>
                         </View>
 
+                        {/* Arrow Color */}
+                        <View style={styles.optionBlock}>
+                            <Text style={styles.optionText}>Arrow Color</Text>
+                            <View style={styles.colorGrid}>
+                                {ARROW_COLORS.map((c) => (
+                                    <Pressable
+                                        key={c.hex}
+                                        style={[
+                                            styles.colorBox,
+                                            { backgroundColor: c.hex },
+                                            arrowColor === c.hex && styles.colorBoxActive
+                                        ]}
+                                        onPress={() => onSetArrowColor(c.hex)}
+                                    >
+                                        {arrowColor === c.hex && <CheckSquare color={c.name === 'Yellow' || c.name === 'Cyan' ? '#000' : '#fff'} size={20} />}
+                                    </Pressable>
+                                ))}
+                            </View>
+                        </View>
+
                         <Text style={styles.sectionTitle}>Visuals</Text>
                         <View style={styles.pieceGrid}>
                             {PIECE_SETS.map(set => (
@@ -138,7 +170,7 @@ export default function DeepSettingsModal({
                             <RefreshCcw color="#fff" size={18} />
                             <Text style={styles.resetText}>Reset Deep Data</Text>
                         </Pressable>
-                        <Text style={styles.resetNote}>Resets calculation rating and history.</Text>
+                        <Text style={styles.resetNote}>Resets rating to 1200, removes favorites, and clears all game history.</Text>
                         <View style={{ height: 40 }} />
                     </ScrollView>
                 </View>
@@ -278,5 +310,32 @@ const styles = StyleSheet.create({
     optionSubText: {
         color: '#888',
         fontSize: 12,
+    },
+    optionBlock: {
+        marginBottom: 15,
+        backgroundColor: '#333',
+        borderRadius: 8,
+        padding: 15,
+        borderWidth: 1,
+        borderColor: '#444',
+    },
+    colorGrid: {
+        flexDirection: 'row',
+        gap: 12,
+        marginTop: 10,
+        justifyContent: 'center', // Centered
+    },
+    colorBox: {
+        width: 40,
+        height: 40,
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+        borderWidth: 2,
+        borderColor: '#444',
+    },
+    colorBoxActive: {
+        borderColor: '#fff',
+        borderWidth: 2,
     },
 });

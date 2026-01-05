@@ -272,6 +272,12 @@ export function useNBackGame(): NBackGame {
                 await AsyncStorage.removeItem('dlc_puzzles_v1');
                 await AsyncStorage.removeItem('suite_owned');
                 await AsyncStorage.removeItem('sequences_config');
+                await AsyncStorage.removeItem('dlc_deep_v1');
+                await AsyncStorage.removeItem('deep_unlocked');
+                await AsyncStorage.removeItem('deep_current_depth');
+                await AsyncStorage.removeItem('deep_band');
+                await AsyncStorage.removeItem('deep_move_time');
+                await AsyncStorage.removeItem('deep_auto_advance');
                 setConfig({ ...DEFAULT_CONFIG, isPremium: false });
                 console.log('HARD RESET: All data and purchases cleared.');
             } else {

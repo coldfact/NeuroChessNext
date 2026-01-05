@@ -6,15 +6,17 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as FileSystem from 'expo-file-system/legacy';
 import { DatabaseService } from '../src/services/database';
 import { AdService } from '../src/services/AdService';
-import { DLC_ENDPOINT } from '../src/config';
+import { DLC_ENDPOINT, DEEP_DLC_ENDPOINT } from '../src/config';
 
 export default function StoreScreen() {
     const router = useRouter();
     const [hasExpansion, setHasExpansion] = useState(false);
+    const [hasDeepExpansion, setHasDeepExpansion] = useState(false);
     const [hasNBackPremium, setHasNBackPremium] = useState(false);
     const [hasSequencesPremium, setHasSequencesPremium] = useState(false);
     const [hasRemoveAds, setHasRemoveAds] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
+    const [isDeepDownloading, setIsDeepDownloading] = useState(false);
     const [downloadProgress, setDownloadProgress] = useState(0);
 
     useEffect(() => {
@@ -23,6 +25,7 @@ export default function StoreScreen() {
 
     // Assets
     const PuzzlesIcon = require('../assets/icon_puzzles.png');
+    const DeepIcon = require('../assets/icon_deep.png');
     const NBackIcon = require('../assets/icon_nback.png');
     const SequencesIcon = require('../assets/icon_sequences.png');
     const StoreIcon = require('../assets/icon_store.png');
@@ -30,11 +33,19 @@ export default function StoreScreen() {
     const checkOwnership = async () => {
         try {
             const ownedExpansion = await AsyncStorage.getItem('dlc_puzzles_v1');
-            if (ownedExpansion === 'true') {
+            if (ownedExpansion === 'true') setHasExpansion(true);
+
+            const ownedDeep = await AsyncStorage.getItem('dlc_deep_v1');
+            if (ownedDeep === 'true') setHasDeepExpansion(true);
+
+            // Suite Check
+            const suite = await AsyncStorage.getItem('suite_owned');
+            if (suite === 'true') {
                 setHasExpansion(true);
-            } else {
-                const suite = await AsyncStorage.getItem('suite_owned');
-                if (suite === 'true') setHasExpansion(true);
+                setHasDeepExpansion(true);
+                setHasNBackPremium(true);
+                setHasSequencesPremium(true);
+                setHasRemoveAds(true);
             }
 
             const ownedNBack = await AsyncStorage.getItem('nback_premium_owned');
@@ -56,6 +67,8 @@ export default function StoreScreen() {
 
         if (item === 'puzzles_expansion') {
             await processExpansionPurchase();
+        } else if (item === 'deep_expansion') { // Deep Logic
+            await processDeepPurchase();
         } else if (item === 'nback_mastery') {
             await processNBackPurchase();
         } else if (item === 'sequences_mastery') {
@@ -101,15 +114,23 @@ export default function StoreScreen() {
                         // Unlock everything
                         await AsyncStorage.setItem('nback_premium_owned', 'true');
                         await AsyncStorage.setItem('sequences_unlocked', 'true');
+                        await AsyncStorage.setItem('dlc_puzzles_v1', 'true');
+                        await AsyncStorage.setItem('dlc_deep_v1', 'true');
                         await AsyncStorage.setItem('suite_owned', 'true');
                         await AdService.purchaseRemoveAds();
+
                         setHasNBackPremium(true);
                         setHasSequencesPremium(true);
+                        setHasExpansion(true);
+                        setHasDeepExpansion(true);
                         setHasRemoveAds(true);
 
-                        // Start download for puzzles
+                        // Start downloads
                         setIsDownloading(true);
                         await downloadAndInstallDLC();
+
+                        setIsDeepDownloading(true);
+                        await installDeepDLC();
                     }
                 }
             ]
@@ -127,7 +148,9 @@ export default function StoreScreen() {
                     onPress: async () => {
                         await new Promise(r => setTimeout(r, 1000));
                         await AsyncStorage.setItem('nback_premium_owned', 'true');
+                        await AdService.purchaseRemoveAds();
                         setHasNBackPremium(true);
+                        setHasRemoveAds(true);
                         Alert.alert("Success", "N-Back Mastery unlocked! Ads removed.");
                     }
                 }
@@ -167,6 +190,8 @@ export default function StoreScreen() {
                     text: "Buy",
                     onPress: async () => {
                         setIsDownloading(true);
+                        await AdService.purchaseRemoveAds();
+                        setHasRemoveAds(true);
                         await downloadAndInstallDLC();
                     }
                 }
@@ -174,13 +199,72 @@ export default function StoreScreen() {
         );
     };
 
+    const processDeepPurchase = async () => {
+        Alert.alert(
+            "Confirm Purchase",
+            "Get Deep Expansion for $1.99?\n(Also removes ads!)",
+            [
+                { text: "Cancel", style: "cancel" },
+                {
+                    text: "Buy",
+                    onPress: async () => {
+                        setIsDeepDownloading(true);
+                        await AdService.purchaseRemoveAds();
+                        setHasRemoveAds(true);
+                        await installDeepDLC();
+                    }
+                }
+            ]
+        );
+    };
+
+    const installDeepDLC = async () => {
+        try {
+            const fileUri = FileSystem.cacheDirectory + 'deep_expansion.sqlite';
+
+            // Check if already installed (Default is 0)
+            const available = await DatabaseService.getAvailablePuzzleCount('deep');
+            if (available > 0) {
+                console.log(`Deep Puzzle count is ${available}. Likely installed.`);
+                setHasDeepExpansion(true);
+                await AsyncStorage.setItem('dlc_deep_v1', 'true');
+                setIsDeepDownloading(false); // Stop loading spinner if we return early
+                Alert.alert("Success", "Deep Expansion already active. Restored access.");
+                return;
+            }
+
+            console.log(`Downloading Deep DLC from ${DEEP_DLC_ENDPOINT}...`);
+            const result = await FileSystem.downloadAsync(DEEP_DLC_ENDPOINT, fileUri);
+
+            if (result.status !== 200) throw new Error(`Download failed with status ${result.status}`);
+            if (!result || !result.uri) throw new Error("Download failed");
+
+            console.log('Download complete:', result.uri);
+            await new Promise(r => setTimeout(r, 500));
+
+            console.log('Merging Deep DLC...');
+            await DatabaseService.installDeepDLC(result.uri);
+
+            await FileSystem.deleteAsync(result.uri, { idempotent: true });
+            await AsyncStorage.setItem('dlc_deep_v1', 'true');
+            setHasDeepExpansion(true);
+
+            Alert.alert("Success!", "Deep Expansion installed. Ads removed.");
+        } catch (e: any) {
+            console.error("Deep DLC Install Error:", e);
+            Alert.alert("Error", "Failed to download Deep expansion.\n" + e.message);
+        } finally {
+            setIsDeepDownloading(false);
+        }
+    };
+
     const downloadAndInstallDLC = async () => {
         try {
             const fileUri = FileSystem.cacheDirectory + 'puzzles_expansion.sqlite';
 
             // Check if already extensive
-            const puzzleCount = await DatabaseService.getPuzzleCount();
-            if (puzzleCount > 7000) {
+            const puzzleCount = await DatabaseService.getAvailablePuzzleCount('standard');
+            if (puzzleCount > 3510) {
                 console.log(`Puzzle count is ${puzzleCount}. Expansion likely already installed.`);
                 setDownloadProgress(1);
                 await new Promise(r => setTimeout(r, 500));
@@ -220,6 +304,7 @@ export default function StoreScreen() {
 
     const handleRestore = async () => {
         const owned = await AsyncStorage.getItem('dlc_puzzles_v1');
+        const ownedDeep = await AsyncStorage.getItem('dlc_deep_v1');
         const ownedNBack = await AsyncStorage.getItem('nback_premium_owned');
         const ownedSequences = await AsyncStorage.getItem('sequences_unlocked');
         const ownedAds = await AsyncStorage.getItem('remove_ads_owned');
@@ -228,6 +313,10 @@ export default function StoreScreen() {
 
         if (owned === 'true') {
             setHasExpansion(true);
+            restored = true;
+        }
+        if (ownedDeep === 'true') {
+            setHasDeepExpansion(true);
             restored = true;
         }
         if (ownedNBack === 'true') {
@@ -318,6 +407,54 @@ export default function StoreScreen() {
                     </View>
                 </View>
 
+                {/* DEEP MODE */}
+                <View style={[styles.compactCard, { borderColor: '#3498db' }]}>
+                    <View style={styles.iconBox}>
+                        <Image source={DeepIcon} style={styles.gameIcon} />
+                    </View>
+                    <View style={styles.compactInfo}>
+                        <Text style={[styles.compactTitle, { color: '#3498db' }]}>Deep Expansion</Text>
+                        <Text style={styles.compactDesc}>60k Deep Puzzles (4+ moves) & Remove Ads.</Text>
+                    </View>
+                    <View style={styles.actionBox}>
+                        {hasDeepExpansion ? (
+                            <View style={styles.ownedBadge}>
+                                <Check color="#fff" size={14} />
+                                <Text style={styles.ownedText}>Owned</Text>
+                            </View>
+                        ) : isDeepDownloading ? (
+                            <ActivityIndicator size="small" color="#3498db" />
+                        ) : (
+                            <Pressable style={styles.buyBtn} onPress={() => handlePurchase('deep_expansion')}>
+                                <Text style={styles.buyBtnText}>$1.99</Text>
+                            </Pressable>
+                        )}
+                    </View>
+                </View>
+
+                {/* SEQUENCES (Moved above N-Back) */}
+                <View style={[styles.compactCard, { borderColor: '#00A8E8' }]}>
+                    <View style={styles.iconBox}>
+                        <Image source={SequencesIcon} style={styles.gameIcon} />
+                    </View>
+                    <View style={styles.compactInfo}>
+                        <Text style={[styles.compactTitle, { color: '#00A8E8' }]}>Sequences Mastery</Text>
+                        <Text style={styles.compactDesc}>Unlock Long Sequences & Remove Ads.</Text>
+                    </View>
+                    <View style={styles.actionBox}>
+                        {hasSequencesPremium ? (
+                            <View style={styles.ownedBadge}>
+                                <Check color="#fff" size={14} />
+                                <Text style={styles.ownedText}>Owned</Text>
+                            </View>
+                        ) : (
+                            <Pressable style={styles.buyBtn} onPress={() => handlePurchase('sequences_mastery')}>
+                                <Text style={styles.buyBtnText}>$1.99</Text>
+                            </Pressable>
+                        )}
+                    </View>
+                </View>
+
                 {/* N-BACK */}
                 <View style={[styles.compactCard, { borderColor: '#9b59b6' }]}>
                     <View style={styles.iconBox}>
@@ -335,29 +472,6 @@ export default function StoreScreen() {
                             </View>
                         ) : (
                             <Pressable style={styles.buyBtn} onPress={() => handlePurchase('nback_mastery')}>
-                                <Text style={styles.buyBtnText}>$1.99</Text>
-                            </Pressable>
-                        )}
-                    </View>
-                </View>
-
-                {/* SEQUENCES */}
-                <View style={[styles.compactCard, { borderColor: '#00A8E8' }]}>
-                    <View style={styles.iconBox}>
-                        <Image source={SequencesIcon} style={styles.gameIcon} />
-                    </View>
-                    <View style={styles.compactInfo}>
-                        <Text style={[styles.compactTitle, { color: '#00A8E8' }]}>Sequences Mastery</Text>
-                        <Text style={styles.compactDesc}>Unlock Long Sequences & Remove Ads.</Text>
-                    </View>
-                    <View style={styles.actionBox}>
-                        {hasSequencesPremium ? (
-                            <View style={styles.ownedBadge}>
-                                <Check color="#fff" size={14} />
-                                <Text style={styles.ownedText}>Owned</Text>
-                            </View>
-                        ) : (
-                            <Pressable style={styles.buyBtn} onPress={() => handlePurchase('sequences_mastery')}>
                                 <Text style={styles.buyBtnText}>$1.99</Text>
                             </Pressable>
                         )}

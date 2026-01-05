@@ -26,8 +26,8 @@ export default function DepthSelectorModal({
         // Lock levels 3-9 if not premium (Only 1 and 2 are unlocked)
         if (depth >= 3 && !isPremium) {
             Alert.alert(
-                "Unlock Deep Mastery",
-                "Upgrade to unlock Depth levels 3-9 and remove ads!",
+                "Unlock Deep Mode",
+                "Upgrade to Deep Expansion to unlock Depth levels 3-9 and remove ads!",
                 [
                     { text: "Cancel", style: "cancel" },
                     {
