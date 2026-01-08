@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NeuroChess | Train Your Chess Brain</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0B0E13;
+            --text-white: #ffffff;
+            --electric-blue: #00B4E6;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-white);
+            font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+            overflow: hidden;
+        }
+
+        /* Hero Container */
+        .container {
+            max-width: 600px;
+            animation: fadeIn 1.2s ease-out;
+        }
+
+        /* Brand Logo */
+        .logo {
+            width: 180px;
+            height: auto;
+            margin-bottom: 40px;
+            /* Subtle glow to make the logo pop against the dark background */
+            filter: drop-shadow(0 0 15px rgba(0, 180, 230, 0.2));
+        }
+
+        h1 {
+            font-size: 3rem;
+            font-weight: 700;
+            letter-spacing: -0.04em;
+            margin: 0 0 15px 0;
+            text-transform: uppercase;
+        }
+
+        p {
+            font-size: 1.25rem;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 40px;
+            font-weight: 400;
+        }
+
+        /* Subtle animated divider */
+        .divider {
+            width: 60px;
+            height: 4px;
+            background-color: var(--electric-blue);
+            margin: 0 auto 30px;
+            border-radius: 2px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 480px) {
+            h1 { font-size: 2rem; }
+            p { font-size: 1.1rem; }
+            .logo { width: 140px; }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <img src="logo.png" alt="NeuroChess Logo" class="logo">
+
+        <div class="divider"></div>
+
+        <h1>Train Your Chess Brain</h1>
+        <p>The NeuroChess Suite is on its way!</p>
+    </div>
+
+</body>
+</html>

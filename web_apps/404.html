@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>404 Blunder Detected | NeuroChess</title>
+    <style>
+        :root {
+            --bg-color: #0B0E13;
+            --text-white: #ffffff;
+            --electric-blue: #00B4E6;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            color: var(--text-white);
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            text-align: center;
+        }
+
+        /* 404 Fallen King Illustration */
+        .blunder-image {
+            max-width: 800px;
+            width: 100%;
+            height: auto;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 10px 0;
+            letter-spacing: -0.02em;
+        }
+
+        p {
+            font-size: 1.1rem;
+            line-height: 1.6;
+            color: #b0b0b0;
+            margin-bottom: 30px;
+        }
+
+        .cta-button {
+            color: var(--text-white);
+            text-decoration: none;
+            font-weight: 600;
+            border: 2px solid var(--electric-blue);
+            padding: 12px 24px;
+            border-radius: 6px;
+            transition: all 0.2s ease;
+            margin-bottom: 50px;
+        }
+
+        .cta-button:hover {
+            background-color: var(--electric-blue);
+            color: var(--bg-color);
+        }
+
+        /* Small Branding Logo at bottom */
+        .brand-footer {
+            width: 120px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+
+    <img src="404.png" alt="Fallen King Illustration" class="blunder-image">
+
+    <h1>404 Blunder Detected!</h1>
+    
+    <p>
+        Don’t worry. Even grandmasters blunder.<br>
+        The difference? They train their brains.
+    </p>
+
+    <a href="/" class="cta-button">Back to neurochess.com</a>
+
+    <img src="logo.png" alt="NeuroChess Logo" class="brand-footer">
+
+</body>
+</html>

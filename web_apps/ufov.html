@@ -59,7 +59,7 @@
         .correct-pulse { background-color: #1b5e20 !important; }
         .fail-pulse { background-color: #b71c1c !important; }
 
-        .modal {
+		.modal {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             background: rgba(0,0,0,0.95); display: none; flex-direction: column;
             align-items: center; justify-content: center; z-index: 500;
@@ -69,6 +69,10 @@
             background: #1a1a1a; padding: 30px; border-radius: 12px; width: 85%; max-width: 800px;
             max-height: 80vh; overflow-y: auto; border: 1px solid #333; position: relative;
         }
+
+		.modal-content a:visited {
+			color: var(--electric-blue);
+		}
 
         .close-btn { position: absolute; top: 15px; right: 20px; font-size: 1.5rem; cursor: pointer; color: #666; }
         #target-display {
@@ -106,20 +110,29 @@
 </head>
 <body>
 
-    <div id="help-modal" class="modal">
+	<div id="help-modal" class="modal">
         <div class="modal-content">
             <span class="close-btn" onclick="closeModal('help-modal')">&times;</span>
-            <h2 style="text-align: center; color: var(--neon-green);">NeuroChess UFOV Extreme</h2>
+            <h2 style="text-align: center;">NeuroChess UFOV Extreme</h2>
+            
             <h3>How to Play</h3>
+            <p>This is a dual-task cognitive trainer designed to expand your <b>Useful Field of View (UFOV)</b>. You must process high-resolution information in the center while detecting flashes in your periphery.</p>
             <ul>
-                <li><strong>Announcement:</strong> Memorize the Target Piece shown at start.</li>
-                <li><strong>Match:</strong> If central piece matches target, click <b>Peripheral Flash</b>.</li>
-                <li><strong>Lure:</strong> If central piece is different, click <b>Center Square</b>.</li>
-                <li><strong>First 2 Moves:</strong> Always matches to help you calibrate.</li>
+                <li><strong>The Target:</strong> At the start, you are assigned a Target Piece. Memorize it.</li>
+                <li><strong>Match Condition:</strong> If the central piece matches your target, click the <b>Peripheral Flash</b>.</li>
+                <li><strong>Lure Condition:</strong> If the central piece is <u>NOT</u> your target, click the <b>Center Square</b> where the piece is.</li>
+                <li><strong>Confounders:</strong> If enabled, a second color will flash to distract you. Only react to your primary Target Color.</li>
             </ul>
-            <h3>Research Articles</h3>
+
+            <h3>Neuroscience & UFOV</h3>
+            <p>UFOV measures the spatial area from which a person can extract information in a single glance. Training this area has been clinically linked to significant "far-transfer" improvements in real-world processing speeds and a reduced risk of cognitive decline.</p>
+            
+            <h3>Enhancement</h3>
+            <p><strong>Selective Attention:</strong> By introducing confounders, we trigger <b>Feature Integration Theory</b>, forcing the brain to bind color and location data synchronously, increasing load on the Parietal Cortex.</p>
+
+            <h3>Research Links</h3>
             <ul>
-                <li><a href="https://www.researchgate.net/publication/19924790_Age_and_visual_search_expanding_the_useful_field_of_view" target="_blank">Age and visual search: expanding the useful field of view (Ball et al.)</a></li>
+                <li><a href="https://www.researchgate.net/publication/19924790_Age_and_visual_search_expanding_the_useful_field_of_view" target="_blank">Age and visual search: expanding the useful field of view(Ball et al.)</a></li>
                 <li><a href="https://pubmed.ncbi.nlm.nih.gov/29201994/" target="_blank">Speed of processing training results in lower risk of dementia (Edwards et al.)</a></li>
                 <li><a href="https://www.nature.com/articles/nature01647" target="_blank">Action video game modifies visual selective attention (Green & Bavelier)</a></li>
             </ul>
@@ -145,8 +158,8 @@
             <button class="help-icon" onclick="openModal('help-modal')">?</button>
         </div>
         <div class="dash-row" style="border-top: 1px solid #222; padding-top: 5px;">
-            <div class="config-group"><label class="stat-label">Min ms:</label><input type="number" id="min-ms-input" value="20" min="1" style="width:50px;"></div>
-            <div class="config-group"><label class="stat-label">Start (s):</label><input type="number" id="start-time-input" value="1" step="0.1" style="width:55px;"></div>
+            <div class="config-group"><label class="stat-label">Min ms:</label><input type="number" id="min-ms-input" value="30" min="10" step="10" style="width:45px;"></div>
+            <div class="config-group"><label class="stat-label">Start (s):</label><input type="number" id="start-time-input" value="1" step="0.1" style="width:45px;"></div>
             <div class="config-group">
                 <select id="game-time-select" onchange="updateTimerPreview()">
                     <option value="1">1m</option><option value="3" selected>3m</option><option value="5">5m</option><option value="10">10m</option><option value="20">20m</option><option value="30">30m</option><option value="0">∞</option>
@@ -158,13 +171,13 @@
             <div class="config-group" style="border-left: 1px solid #333; padding-left:10px;">
                 <label class="stat-label">Target:</label>
                 <select id="target-color-select" onchange="validateColors()">
-                    <option value="var(--neon-green)" selected>Green</option><option value="var(--electric-blue)">Blue</option><option value="var(--hot-pink)">Pink</option><option value="var(--amber)">Amber</option>
+                    <option value="var(--amber)">Amber</option><option value="var(--electric-blue)">Blue</option><option value="var(--hot-pink)">Pink</option>
                 </select>
             </div>
             <div class="config-group">
-                <input type="checkbox" id="confounder-check" checked><label class="stat-label" for="confounder-check">Confounder:</label>
+                <input type="checkbox" id="confounder-check"><label class="stat-label" for="confounder-check">Confounder:</label>
                 <select id="confounder-color-select" onchange="validateColors()">
-                    <option value="var(--hot-pink)" selected>Pink</option><option value="var(--amber)">Amber</option><option value="var(--neon-green)">Green</option><option value="var(--electric-blue)">Blue</option>
+                    <option value="var(--electric-blue)" selected>Blue</option><option value="var(--hot-pink)" >Pink</option><option value="var(--amber)">Amber</option>
                 </select>
             </div>
         </div>

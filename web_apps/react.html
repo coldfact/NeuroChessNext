@@ -1,0 +1,1057 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>NeuroChess React</title>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@600&display=swap"
+      rel="stylesheet"
+    />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <style>
+      :root {
+        --bg: #050505;
+        --sq-l: #d1d1d1;
+        --sq-d: #7a7a7a;
+        --neon-green: #39ff14;
+        --neon-red: #ff3131;
+        --electric-blue: #00f2ff;
+        --amber: #ffbf00;
+        --orange: #ff6600;
+        --deep-blue: #00008b;
+        --teal: #008080;
+        --purple: #800080;
+        --orchid: #da70d6;
+        --sq-size: 80px;
+        --hint-top: 5%;
+      }
+
+      body {
+        background: var(--bg);
+        color: #eee;
+        font-family: "Segoe UI", Tahoma, sans-serif;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        overflow: hidden;
+        cursor: default;
+        user-select: none;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        /* Removed gap: 10px; to allow specific spacing */
+        font-family: "Inter", sans-serif;
+        font-weight: 600;
+        font-size: 1.4rem;
+        color: #ffffff;
+        margin-right: 25px;
+        letter-spacing: -0.5px;
+      }
+
+      .brand-logo {
+        width: 28px;
+        height: 28px;
+        object-fit: contain;
+        /* Adjust this value to control distance to "NeuroChess" */
+        margin-right: 1px;
+      }
+
+      .brand span {
+        color: var(--neon-green);
+        /* This creates the gap between "NeuroChess" and "React" */
+        margin-left: 10px;
+      }
+
+      .dashboard {
+        background: #111;
+        width: 100%;
+        padding: 10px 0;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: center;
+        border-bottom: 1px solid #333;
+        z-index: 100;
+      }
+      .dash-row {
+        display: flex;
+        justify-content: center;
+        gap: 15px;
+        align-items: center;
+        width: 100%;
+      }
+      .stat-box {
+        text-align: center;
+        min-width: 80px;
+        border-right: 1px solid #333;
+        padding-right: 10px;
+      }
+      .stat-label {
+        font-size: 0.6rem;
+        color: #888;
+        text-transform: uppercase;
+      }
+      .stat-val {
+        font-size: 1rem;
+        font-weight: bold;
+        color: var(--neon-green);
+        font-family: monospace;
+      }
+
+      input,
+      select,
+      button {
+        background: #222;
+        color: white;
+        border: 1px solid #444;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        cursor: pointer;
+      }
+      #toggle-btn {
+        background: var(--neon-green);
+        color: black;
+        font-weight: bold;
+        padding: 8px 25px;
+        border: none;
+      }
+      #toggle-btn.running {
+        background: var(--neon-red);
+        color: white;
+      }
+
+      #viewport {
+        flex-grow: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        background: black;
+        position: relative;
+      }
+      #board {
+        display: grid;
+        grid-template-columns: repeat(8, var(--sq-size));
+        grid-template-rows: repeat(8, var(--sq-size));
+        border: 2px solid #444;
+        position: relative;
+        background: #000;
+      }
+
+      .square {
+        width: var(--sq-size);
+        height: var(--sq-size);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        position: relative;
+        cursor: pointer;
+      }
+      .light {
+        background: var(--sq-l);
+      }
+      .dark {
+        background: var(--sq-d);
+      }
+      .coord {
+        position: absolute;
+        font-size: 11px;
+        font-weight: 800;
+        pointer-events: none;
+        color: #000000;
+      }
+      .coord-file {
+        bottom: 2px;
+        right: 4px;
+      }
+      .coord-rank {
+        top: 2px;
+        left: 4px;
+      }
+
+      .flash-bg {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1;
+        display: none;
+        pointer-events: none;
+      }
+
+      #coord-hint {
+        position: absolute;
+        top: var(--hint-top);
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.9);
+        color: var(--neon-green);
+        font-weight: 900;
+        padding: 4px 14px;
+        border-radius: 4px;
+        font-size: 1.3rem;
+        z-index: 150;
+        box-shadow: 0 0 15px rgba(57, 255, 20, 0.4);
+        pointer-events: none;
+        display: none;
+        border: 2px solid var(--neon-green);
+        white-space: nowrap;
+        font-family: "Inter", sans-serif;
+      }
+
+      /* Lighter background for pieces in promotion modal */
+      #promo-overlay {
+        position: absolute;
+        top: var(--hint-top);
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: #111;
+        border: 2px solid var(--electric-blue);
+        border-radius: 8px;
+        display: none;
+        grid-template-columns: repeat(4, 45px);
+        gap: 5px;
+        padding: 5px;
+        z-index: 1000;
+        box-shadow: 0 0 20px black;
+      }
+      .promo-opt {
+        width: 45px;
+        height: 45px;
+        background: #707070;
+        border-radius: 4px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        cursor: pointer;
+        transition: background 0.2s;
+      }
+      .promo-opt:hover {
+        background: #666;
+      }
+      .promo-opt svg {
+        width: 80%;
+        height: 80%;
+      }
+
+      .piece-container {
+        width: 90%;
+        height: 90%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        z-index: 10;
+        cursor: pointer;
+        transition: transform 0.2s ease-out;
+        position: relative;
+      }
+      .piece-svg {
+        width: 85%;
+        height: 85%;
+        pointer-events: none;
+      }
+
+      @keyframes piece-land {
+        0% {
+          transform: scale(6);
+          opacity: 0.3;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 1;
+        }
+      }
+      .piece-impact {
+        animation: piece-land 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+      }
+      .correct-pulse {
+        background-color: rgba(57, 255, 20, 0.5) !important;
+      }
+      .fail-pulse {
+        background-color: rgba(255, 49, 49, 0.95) !important;
+      }
+      .selected-sq {
+        background-color: rgba(255, 255, 255, 0.25) !important;
+      }
+
+      /* Report Overlay Styles */
+      #board-report {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(10, 10, 10, 0.98);
+        padding: 40px 35px 30px 35px;
+        border-radius: 12px;
+        border: 2px solid var(--neon-green);
+        z-index: 200;
+        display: none;
+        text-align: center;
+        min-width: 360px;
+        box-shadow: 0 0 60px rgba(0, 0, 0, 1);
+      }
+
+      #board-report .brand {
+        margin-right: 0; /* Neutralize the dashboard's 25px offset */
+        justify-content: center; /* Center the flex items */
+        width: 100%; /* Ensure it spans the full container width */
+      }
+
+      /* Neon-Red Share Icon [cite: 2026-01-07] */
+      .report-share-icon {
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        cursor: pointer;
+        color: var(--neon-red);
+        opacity: 0.8;
+        transition: opacity 0.2s, transform 0.2s;
+      }
+      .report-share-icon:hover {
+        opacity: 1;
+        transform: scale(1.1);
+      }
+      .report-share-icon:hover::after {
+        content: "Download report image";
+        position: absolute;
+        right: 0;
+        top: 25px;
+        font-size: 0.6rem;
+        background: #222;
+        color: #eee;
+        padding: 4px 8px;
+        border-radius: 4px;
+        white-space: nowrap;
+        pointer-events: none;
+      }
+
+      .summary-grid {
+        display: flex;
+        justify-content: center;
+        gap: 30px;
+        margin: 15px 0;
+      }
+      .summary-val {
+        font-size: 1.5rem;
+        color: var(--neon-green);
+        font-weight: bold;
+        display: block;
+      }
+
+      /* White Promotional URL [cite: 2026-01-07] */
+      .promo-link {
+        font-size: 0.65rem;
+        color: #ffffff;
+        margin-top: 15px;
+        letter-spacing: 0.5px;
+        font-family: monospace;
+        border-top: 1px solid #222;
+        padding-top: 10px;
+      }
+
+      .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.95);
+        display: none;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 500;
+      }
+      .modal-content {
+        background: #1a1a1a;
+        padding: 30px;
+        border-radius: 12px;
+        width: 85%;
+        max-width: 700px;
+        border: 1px solid #333;
+        position: relative;
+        text-align: left;
+        line-height: 1.5;
+        color: #ccc;
+        overflow-y: auto;
+        max-height: 90vh;
+      }
+      .modal-content h3 {
+        color: var(--electric-blue);
+        border-bottom: 1px solid #333;
+        padding-bottom: 5px;
+        margin-top: 20px;
+      }
+      .modal-content b {
+        color: white;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="dashboard" id="controls">
+      <div class="dash-row">
+        <div class="brand">
+          <img src="neurochess.png" class="brand-logo" alt="Logo" />NeuroChess
+          <span>React</span>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Timer</div>
+          <div id="timer-out" class="stat-val">01:00</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-label">Correct</div>
+          <div id="correct-out" class="stat-val">0</div>
+        </div>
+        <div class="stat-box" style="border: none">
+          <div class="stat-label">Moves</div>
+          <div id="moves-out" class="stat-val">0</div>
+        </div>
+        <button id="toggle-btn" onclick="toggleGame()">START TRAINING</button>
+        <button
+          style="
+            background: #b71c1c;
+            border-radius: 50%;
+            width: 22px;
+            height: 22px;
+            border: none;
+            color: white;
+            margin-left: 10px;
+          "
+          onclick="openModal('help-modal')"
+        >
+          ?
+        </button>
+      </div>
+      <div
+        class="dash-row"
+        style="border-top: 1px solid #222; padding-top: 5px"
+      >
+        <div class="config-group">
+          <input type="checkbox" id="legal-check" checked /><label
+            class="stat-label"
+            >Legal</label
+          >
+        </div>
+        <div class="config-group">
+          <input type="checkbox" id="mix-check" checked /><label
+            class="stat-label"
+            >Mix</label
+          >
+        </div>
+        <div class="config-group">
+          <input type="checkbox" id="coord-check" /><label class="stat-label"
+            >CO-ORD</label
+          >
+        </div>
+        <div class="config-group">
+          <label class="stat-label">ms:</label
+          ><input
+            type="number"
+            id="show-ms-input"
+            value="500"
+            style="width: 50px"
+          />
+        </div>
+        <div class="config-group">
+          <label class="stat-label">Time:</label
+          ><select id="game-time-select" onchange="updateTimerPreview()">
+            <option value="1" selected>1m</option>
+            <option value="3">3m</option>
+            <option value="5">5m</option>
+            <option value="0">∞</option>
+          </select>
+        </div>
+        <div class="config-group">
+          <label class="stat-label">Zoom:</label
+          ><select id="size-toggle" onchange="updateScale()">
+            <option value="1">100%</option>
+            <option value="0.75" selected>75%</option>
+            <option value="0.5">50%</option>
+            <option value="0.25">25%</option>
+          </select>
+        </div>
+        <div class="config-group" style="padding-left: 10px">
+          <label class="stat-label">Target:</label
+          ><select id="target-color-select">
+            <option value="var(--amber)">Yellow</option>
+            <option value="var(--deep-blue)">Blue</option>
+            <option value="var(--purple)">Purple</option>
+          </select>
+        </div>
+        <div class="config-group">
+          <input type="checkbox" id="confounder-check" /><label
+            class="stat-label"
+            >DISTRACT</label
+          >
+        </div>
+      </div>
+    </div>
+
+    <div id="viewport">
+      <div id="board"></div>
+      <div id="coord-hint"></div>
+
+      <div id="promo-overlay">
+        <div class="promo-opt" onclick="promote('queen')"></div>
+        <div class="promo-opt" onclick="promote('rook')"></div>
+        <div class="promo-opt" onclick="promote('knight')"></div>
+        <div class="promo-opt" onclick="promote('bishop')"></div>
+      </div>
+
+      <div id="board-report">
+        <div class="report-share-icon" onclick="downloadReport()">
+          <svg
+            width="20"
+            height="20"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+            <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" />
+            <polyline points="16 6 12 2 8 6" />
+            <line x1="12" y1="2" x2="12" y2="15" />
+          </svg>
+        </div>
+        <div class="brand" style="margin: 0 0 10px 0; font-size: 1.3rem">
+          <img src="neurochess.png" class="brand-logo" alt="Logo" /> NeuroChess
+          <span>React</span>
+        </div>
+        <h2
+          style="
+            color: var(--electric-blue);
+            margin: 0 0 20px 0;
+            font-size: 1.1rem;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+          "
+        >
+          Readiness Report
+        </h2>
+        <div class="summary-grid">
+          <div>
+            <div class="stat-label">CORRECT</div>
+            <div id="res-correct" class="summary-val">0</div>
+          </div>
+          <div>
+            <div class="stat-label">MOVES</div>
+            <div id="res-moves" class="summary-val">0</div>
+          </div>
+        </div>
+        <div class="summary-grid" style="margin-top: 5px">
+          <div>
+            <div class="stat-label">ACCURACY</div>
+            <div id="res-acc" class="summary-val">0%</div>
+          </div>
+          <div>
+            <div class="stat-label">MOVES/MIN</div>
+            <div
+              id="res-mpm"
+              class="summary-val"
+              style="color: var(--electric-blue)"
+            >
+              0.0
+            </div>
+          </div>
+        </div>
+        <div
+          id="res-settings"
+          style="
+            font-size: 0.75rem;
+            color: #888;
+            margin-top: 20px;
+            letter-spacing: 1px;
+            font-family: monospace;
+          "
+        ></div>
+        <div class="promo-link">https://neurochess.com/react.html</div>
+      </div>
+    </div>
+
+    <div id="help-modal" class="modal">
+      <div class="modal-content">
+        <span
+          style="
+            position: absolute;
+            top: 15px;
+            right: 20px;
+            font-size: 1.5rem;
+            cursor: pointer;
+            color: #666;
+          "
+          onclick="closeModal('help-modal')"
+          >&times;</span
+        >
+        <div class="brand" style="text-align: center; margin-bottom: 15px">
+          NeuroChess <span>React</span>
+        </div>
+        <p>
+          This game prepares attention, motor response, and spatial
+          visualization for bullet chess play.
+        </p>
+        <h3>Settings:</h3>
+        <p>
+          <b>Legal:</b> If checked, only valid chess moves for the piece are
+          shown.
+        </p>
+        <p><b>Mix pieces:</b> If checked, a mixture of pieces are used.</p>
+        <p>
+          <b>Co-ord:</b> Instead of square highlighting, a board co-ordinate is
+          shown (e.g. g8) and you must move the piece there.
+        </p>
+        <p>
+          <b>Show ms:</b> the milliseconds the target square is highlighted.
+        </p>
+        <p><b>Time:</b> the overall game time. Set to ∞ for endless play.</p>
+        <p>
+          <b>Zoom:</b> board zoom - 100% allows for the longest moves, 25% the
+          shortest.
+        </p>
+        <p><b>Target color:</b> the color of the target square.</p>
+        <p>
+          <b>Distract:</b> if checked, a second distractor square is
+          highlighted.
+        </p>
+        <h3>Special game mechanics:</h3>
+        <p>
+          <b>King:</b> The King has a 70% probability of starting on E1. In
+          Legal mode, target selection is heavily biased toward castling squares
+          (C1/G1).
+        </p>
+        <p>
+          <b>Pawn:</b> Pawns are never spawned on the 1st or 8th rank. They
+          always have diagonal captures enabled and can move 2 squares from Rank
+          2. If a Pawn reaches Rank 8, you can choose a promotion piece.
+        </p>
+      </div>
+    </div>
+
+    <script>
+      const moveAudio = new Audio("move.mp3");
+      const files = ["a", "b", "c", "d", "e", "f", "g", "h"];
+      const svgs = {
+        bishop: `<svg viewBox="0 0 45 45" class="piece-svg"><g fill="none" stroke="#000" stroke-width="1.5"><g fill="#000"><path d="M9 36c3.4-1 10.1.4 13.5-2 3.4 2.4 10.1 1 13.5 2 0 0 1.6.5 3 2-.7 1-1.6 1-3 .5-3.4-1-10.1.5-13.5-1-3.4 1.5-10.1 0-13.5 1-1.4.5-2.3.5-3-.5 1.4-2 3-2 3-2z"/><path d="M15 32c2.5 2.5 12.5 2.5 15 0 .5-1.5 0-2 0-2 0-2.5-2.5-4-2.5-4 5.5-1.5 6-11.5-5-15.5-11 4-10.5 14-5 15.5 0 0-2.5 1.5-2.5 4 0 0-.5.5 0 2z"/><path d="M25 8a2.5 2.5 0 1 1-5 0 2.5 2.5 0 1 1 5 0z"/></g><path stroke="#ececec" d="M17.5 26h10M15 30h15m-7.5-14.5v5M20 18h5"/></g></svg>`,
+        king: `<svg viewBox="0 0 45 45" class="piece-svg"><g fill="none" stroke="#000" stroke-width="1.5"><path d="M22.5 11.6V6"/><path fill="#000" d="M22.5 25s4.5-7.5 3-10.5c0 0-1-2.5-3-2.5s-3 2.5-3 2.5c-1.5 3 3 10.5 3 10.5"/><path fill="#000" d="M11.5 37a22.3 22.3 0 0 0 21 0v-7s9-4.5 6-10.5c-4-6.5-13.5-3.5-16 4V27v-3.5c-3.5-7.5-13-10.5-16-4-3 6 5 10 5 10V37z"/><path d="M20 8h5"/><path stroke="#ececec" d="M32 29.5s8.5-4 6-9.7C34.1 14 25 18 22.5 24.6v2.1-2.1C20 18 9.9 14 7 19.9c-2.5 5.6 4.8 9 4.8 9"/><path stroke="#ececec" d="M11.5 30c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0m-21 3.5c5.5-3 15.5-3 21 0"/></g></svg>`,
+        knight: `<svg viewBox="0 0 45 45" class="piece-svg"><g fill="none" stroke="#000" stroke-width="1.5"><path fill="#000" d="M22 10c10.5 1 16.5 8 16 29H15c0-9 10-6.5 8-21"/><path fill="#000" d="M24 18c.38 2.91-5.55 7.37-8 9-3 2-2.82 4.34-5 4-1.04-.94 1.41-3.04 0-3-1 0 .19 1.23-1 2-1 0-4 1-4-4 0-2 6-12 6-12s1.89-1.9 2-3.5c-.73-1-.5-2-.5-3 1-1 3 2.5 3 2.5h2s.78-2 2.5-3c1 0 1 3 1 3"/><path fill="#ececec" stroke="#ececec" d="M9.5 25.5a.5.5 0 1 1-1 0 .5.5 0 1 1 1 0zm5.43-9.75a.5 1.5 30 1 1-.86-.5.5 1.5 30 1 1 .86.5z"/><path fill="#ececec" stroke="none" d="m24.55 10.4-.45 1.45.5.15c3.15 1 5.65 2.49 7.9 6.75S35.75 29.06 35.25 39l-.05.5h2.25l.05-.5c.5-10.06-.88-16.85-3.25-21.34-2.37-4.49-5.79-6.64-9.19-7.16l-.51-.1z"/></g></svg>`,
+        pawn: `<svg viewBox="0 0 45 45" class="piece-svg"><path stroke="#000" fill="#000" stroke-width="1.5" d="M22.5 9a4 4 0 0 0-3.22 6.38 6.48 6.48 0 0 0-.87 10.65c-3 1.06-7.41 5.55-7.41 13.47h23c0-7.92-4.41-12.41-7.41-13.47a6.46 6.46 0 0 0-.87-10.65A4.01 4.01 0 0 0 22.5 9z"/></svg>`,
+        queen: `<svg viewBox="0 0 45 45" class="piece-svg"><g stroke="#000" stroke-width="1.5"><g stroke="none"><circle cx="6" cy="12" r="2.75"/><circle cx="14" cy="9" r="2.75"/><circle cx="22.5" cy="8" r="2.75"/><circle cx="31" cy="9" r="2.75"/><circle cx="39" cy="12" r="2.75"/></g><path d="M9 26c8.5-1.5 21-1.5 27 0l2.5-12.5L31 25l-.3-14.1-5.2 13.6-3-14.5-3 14.5-5.2-13.6L14 25 6.5 13.5 9 26z"/><path d="M9 26c0 2 1.5 2 2.5 4 1 1.5 1 1 .5 3.5-1.5 1-1.5 2.5-1.5 2.5-1.5 1.5.5 2.5.5 2.5 6.5 1 16.5 1 23 0 0 0 1.5-1 0-2.5 0 0 .5-1.5-1-2.5-.5-2.5-.5-2 .5-3.5 1-2 2.5-2 2.5-4-8.5-1.5-18.5-1.5-27 0z"/><path fill="none" d="M11 38.5a35 35 1 0 0 23 0"/><path fill="none" stroke="#ececec" d="M11 29a35 35 1 0 1 23 0m-21.5 2.5h20m-21 3a35 35 1 0 0 22 0m-23 3a35 35 1 0 0 24 0"/></g></svg>`,
+        rook: `<svg viewBox="0 0 45 45" class="piece-svg"><g stroke="#000" stroke-width="1.5"><path d="M9 39h27v-3H9v3zm3.5-7 1.5-2.5h17l1.5 2.5h-20zm-.5 4v-4h21v4H12z"/><path d="M14 29.5v-13h17v13H14z"/><path d="M14 16.5 11 14h23l-3 2.5H14zM11 14V9h4v2h5V9h5v2h5V9h4v5H11z"/><path fill="none" stroke="#ececec" stroke-width="1" d="M12 35.5h21m-20-4h19m-18-2h17m-17-13h17M11 14h23"/></g></svg>`,
+      };
+
+      let isRunning = false,
+        targetIdx = -1,
+        currentPieceIdx = -1,
+        selectedIdx = -1,
+        currentPieceType = "",
+        isPromoting = false;
+      let sessionTimer = null,
+        sessionTimeElapsed = 0,
+        timeLeft = 0,
+        totalMoves = 0,
+        totalCorrect = 0,
+        transformPending = false;
+      let sessionConfounderOn = false,
+        sessionLegalOn = false,
+        sessionMixOn = false,
+        sessionCoOrdOn = false,
+        currentPieceHTML = "",
+        showMs = 500;
+      let flashEls = [],
+        pieceContainers = [],
+        squareEls = [],
+        flashTimeout = null;
+
+      function openModal(id) {
+        const m = document.getElementById(id);
+        if (m) m.style.display = "flex";
+      }
+      function closeModal(id) {
+        const m = document.getElementById(id);
+        if (m) m.style.display = "none";
+      }
+      function updateTimerPreview() {
+        if (isRunning) return;
+        const mode = parseInt(
+          document.getElementById("game-time-select").value
+        );
+        document.getElementById("timer-out").innerText =
+          mode === 0 ? "00:00" : `${mode.toString().padStart(2, "0")}:00`;
+      }
+      function updateScale() {
+        const z = parseFloat(document.getElementById("size-toggle").value);
+        const dashH = document.getElementById("controls").offsetHeight;
+        const size =
+          (Math.min(window.innerWidth - 40, window.innerHeight - dashH - 40) /
+            8) *
+          z;
+        document.documentElement.style.setProperty("--sq-size", `${size}px`);
+        let hTop = "0%";
+        if (z === 0.5) hTop = "-15%";
+        if (z === 0.25) hTop = "-40%";
+        document.documentElement.style.setProperty("--hint-top", hTop);
+      }
+
+      function initBoard() {
+        const b = document.getElementById("board");
+        b.innerHTML = "";
+        flashEls = [];
+        pieceContainers = [];
+        squareEls = [];
+        const opts = document.querySelectorAll(".promo-opt");
+        opts[0].innerHTML = svgs.queen;
+        opts[1].innerHTML = svgs.rook;
+        opts[2].innerHTML = svgs.knight;
+        opts[3].innerHTML = svgs.bishop;
+        for (let i = 0; i < 64; i++) {
+          const r = Math.floor(i / 8),
+            c = i % 8,
+            s = document.createElement("div");
+          s.className = `square ${(r + c) % 2 === 0 ? "light" : "dark"}`;
+          if (c === 0)
+            s.innerHTML += `<span class="coord coord-rank">${8 - r}</span>`;
+          if (r === 7)
+            s.innerHTML += `<span class="coord coord-file">${files[c]}</span>`;
+          s.innerHTML += `<div class="flash-bg"></div><div class="piece-container"></div>`;
+          s.onclick = () => handleInput(i);
+          s.ondragover = (e) => e.preventDefault();
+          s.ondrop = (e) => {
+            e.preventDefault();
+            handleInput(i);
+          };
+          b.appendChild(s);
+          squareEls.push(s);
+          flashEls.push(s.querySelector(".flash-bg"));
+          const pc = s.querySelector(".piece-container");
+          pc.draggable = true;
+          pc.ondragstart = () => {
+            if (isRunning && !isPromoting) {
+              selectedIdx = i;
+              document.getElementById("coord-hint").style.display = "none";
+            }
+          };
+          pieceContainers.push(pc);
+        }
+      }
+
+      function getLegalSquares(idx, type) {
+        const r = Math.floor(idx / 8),
+          c = idx % 8,
+          legals = [];
+        const pushIfOn = (row, col) => {
+          if (row >= 0 && row < 8 && col >= 0 && col < 8)
+            legals.push(row * 8 + col);
+        };
+        if (type === "knight")
+          [
+            [-2, -1],
+            [-2, 1],
+            [-1, -2],
+            [-1, 2],
+            [1, -2],
+            [1, 2],
+            [2, -1],
+            [2, 1],
+          ].forEach((o) => pushIfOn(r + o[0], c + o[1]));
+        else if (type === "bishop" || type === "rook" || type === "queen") {
+          const dirs = [];
+          if (type !== "bishop") dirs.push([0, 1], [0, -1], [1, 0], [-1, 0]);
+          if (type !== "rook") dirs.push([1, 1], [1, -1], [-1, 1], [-1, -1]);
+          dirs.forEach((d) => {
+            for (let i = 1; i < 8; i++) {
+              let nr = r + d[0] * i,
+                nc = c + d[1] * i;
+              if (nr < 0 || nr > 7 || nc < 0 || nc > 7) break;
+              legals.push(nr * 8 + nc);
+            }
+          });
+        } else if (type === "king") {
+          [
+            [-1, -1],
+            [-1, 0],
+            [-1, 1],
+            [0, -1],
+            [0, 1],
+            [1, -1],
+            [1, 0],
+            [1, 1],
+          ].forEach((o) => pushIfOn(r + o[0], c + o[1]));
+          if (idx === 60) legals.push(58, 62);
+        } else if (type === "pawn") {
+          pushIfOn(r - 1, c);
+          pushIfOn(r - 1, c - 1);
+          pushIfOn(r - 1, c + 1);
+          if (r === 6) pushIfOn(r - 2, c);
+        }
+        return legals.filter((i) => i !== idx);
+      }
+
+      function toggleGame() {
+        isRunning ? stopTraining() : startTraining();
+      }
+      function startTraining() {
+        isRunning = true;
+        isPromoting = false;
+        document.getElementById("board-report").style.display = "none";
+        document.getElementById("promo-overlay").style.display = "none";
+        document.getElementById("toggle-btn").innerText = "STOP";
+        document.getElementById("toggle-btn").classList.add("running");
+        totalMoves = 0;
+        totalCorrect = 0;
+        sessionTimeElapsed = 0;
+        sessionConfounderOn =
+          document.getElementById("confounder-check").checked;
+        sessionLegalOn = document.getElementById("legal-check").checked;
+        sessionMixOn = document.getElementById("mix-check").checked;
+        sessionCoOrdOn = document.getElementById("coord-check").checked;
+        showMs = parseInt(document.getElementById("show-ms-input").value, 10) || 500;
+        const keys = Object.keys(svgs);
+        currentPieceType = keys[Math.floor(Math.random() * keys.length)];
+        currentPieceHTML = svgs[currentPieceType];
+        if (currentPieceType === "king" && Math.random() < 0.7)
+          currentPieceIdx = 60;
+        else if (currentPieceType === "pawn")
+          currentPieceIdx =
+            (Math.floor(Math.random() * 6) + 1) * 8 +
+            Math.floor(Math.random() * 8);
+        else currentPieceIdx = Math.floor(Math.random() * 64);
+        const mode = parseInt(
+          document.getElementById("game-time-select").value
+        );
+        timeLeft = mode === 0 ? 0 : mode * 60;
+        clearInterval(sessionTimer);
+        sessionTimer = setInterval(() => {
+          sessionTimeElapsed++;
+          if (mode === 0) timeLeft++;
+          else {
+            timeLeft--;
+            if (timeLeft <= 0) stopTraining();
+          }
+          const absT = Math.abs(timeLeft);
+          document.getElementById("timer-out").innerText = `${Math.floor(
+            absT / 60
+          )
+            .toString()
+            .padStart(2, "0")}:${(absT % 60).toString().padStart(2, "0")}`;
+        }, 1000);
+        updateUI();
+        nextRound();
+      }
+
+      function stopTraining() {
+        isRunning = false;
+        clearInterval(sessionTimer);
+        clearTimeout(flashTimeout);
+        document.getElementById("toggle-btn").innerText = "START TRAINING";
+        document.getElementById("toggle-btn").classList.remove("running");
+        document.getElementById("coord-hint").style.display = "none";
+        document.getElementById("promo-overlay").style.display = "none";
+        showReport();
+      }
+      function resetBoardStyles() {
+        squareEls.forEach((s) =>
+          s.classList.remove("correct-pulse", "fail-pulse", "selected-sq")
+        );
+      }
+
+      function promote(type) {
+        moveAudio.currentTime = 0;
+        moveAudio.play().catch(() => {}); // Play sound on selection
+        currentPieceType = type;
+        currentPieceHTML = svgs[type];
+        isPromoting = false;
+        document.getElementById("promo-overlay").style.display = "none";
+        setTimeout(nextRound, 100);
+      }
+
+      function nextRound() {
+        if (!isRunning || isPromoting) return;
+        resetBoardStyles();
+        const hint = document.getElementById("coord-hint");
+        hint.style.display = "none";
+        if (
+          sessionMixOn &&
+          totalMoves > 0 &&
+          totalMoves % 5 === 0 &&
+          transformPending
+        ) {
+          transformPending = false;
+          const keys = Object.keys(svgs);
+          let nType = keys[Math.floor(Math.random() * keys.length)];
+          while (
+            nType === currentPieceType ||
+            (nType === "pawn" && (currentPieceIdx < 8 || currentPieceIdx >= 56))
+          ) {
+            nType = keys[Math.floor(Math.random() * keys.length)];
+          }
+          currentPieceType = nType;
+          currentPieceHTML = svgs[currentPieceType];
+          pieceContainers[currentPieceIdx].classList.add("piece-impact");
+          setTimeout(
+            () =>
+              pieceContainers[currentPieceIdx].classList.remove("piece-impact"),
+            500
+          );
+        }
+        pieceContainers.forEach((p, idx) => {
+          p.innerHTML = idx === currentPieceIdx ? currentPieceHTML : "";
+          p.draggable = idx === currentPieceIdx;
+        });
+        let pool = sessionLegalOn
+          ? getLegalSquares(currentPieceIdx, currentPieceType)
+          : Array.from({ length: 64 }, (_, i) => i).filter(
+              (i) => i !== currentPieceIdx
+            );
+        if (pool.length === 0)
+          pool = Array.from({ length: 64 }, (_, i) => i).filter(
+            (i) => i !== currentPieceIdx
+          );
+        if (
+          sessionLegalOn &&
+          currentPieceType === "king" &&
+          currentPieceIdx === 60
+        ) {
+          const castle = pool.filter((i) => i === 58 || i === 62);
+          if (castle.length > 0 && Math.random() < 0.85) pool = castle;
+        }
+        targetIdx = pool[Math.floor(Math.random() * pool.length)];
+        if (sessionCoOrdOn) {
+          const tr = Math.floor(targetIdx / 8),
+            tc = targetIdx % 8;
+          hint.innerText = `${files[tc]}${8 - tr}`;
+          squareEls[currentPieceIdx].appendChild(hint);
+          hint.style.display = "block";
+        } else {
+          const tfColor = document.getElementById("target-color-select").value;
+          flashEls[targetIdx].style.backgroundColor = tfColor;
+          flashEls[targetIdx].style.display = "block";
+          if (sessionConfounderOn) {
+            const distractMap = {
+              "var(--amber)": "var(--orange)",
+              "var(--deep-blue)": "var(--teal)",
+              "var(--purple)": "var(--orchid)",
+            };
+            const cfIdx = pool.filter((i) => i !== targetIdx)[0] || 0;
+            flashEls[cfIdx].style.backgroundColor =
+              distractMap[tfColor] || "var(--orange)";
+            flashEls[cfIdx].style.display = "block";
+          }
+        }
+        clearTimeout(flashTimeout);
+        flashTimeout = setTimeout(() => {
+          flashEls.forEach((f) => (f.style.display = "none"));
+          if (!sessionCoOrdOn) hint.style.display = "none";
+        }, showMs);
+      }
+
+      function handleInput(idx) {
+        if (!isRunning || isPromoting) return;
+        if (selectedIdx === -1) {
+          if (idx === currentPieceIdx) {
+            selectedIdx = idx;
+            squareEls[idx].classList.add("selected-sq");
+            document.getElementById("coord-hint").style.display = "none";
+          } else {
+            squareEls[idx].classList.add("fail-pulse");
+            setTimeout(
+              () => squareEls[idx].classList.remove("fail-pulse"),
+              150
+            );
+          }
+          return;
+        }
+        moveAudio.currentTime = 0;
+        moveAudio.play().catch(() => {});
+        const isCorrect = idx === targetIdx;
+        totalMoves++;
+        if (isCorrect) {
+          totalCorrect++;
+          currentPieceIdx = idx;
+        }
+        if (totalMoves % 5 === 0) transformPending = true;
+        squareEls[selectedIdx].classList.remove("selected-sq");
+        squareEls[idx].classList.add(
+          isCorrect ? "correct-pulse" : "fail-pulse"
+        );
+        updateUI();
+        selectedIdx = -1;
+
+        if (isCorrect && currentPieceType === "pawn" && idx < 8) {
+          isPromoting = true;
+          const overlay = document.getElementById("promo-overlay");
+          squareEls[idx].appendChild(overlay);
+          overlay.style.display = "grid";
+        } else {
+          setTimeout(nextRound, 150);
+        }
+      }
+
+      function updateUI() {
+        document.getElementById("correct-out").innerText = totalCorrect;
+        document.getElementById("moves-out").innerText = totalMoves;
+      }
+      function showReport() {
+        const time = sessionTimeElapsed || 1;
+        document.getElementById("res-correct").innerText = totalCorrect;
+        document.getElementById("res-moves").innerText = totalMoves;
+        document.getElementById("res-acc").innerText =
+          totalMoves > 0
+            ? ((totalCorrect / totalMoves) * 100).toFixed(1) + "%"
+            : "0%";
+        document.getElementById("res-mpm").innerText = (
+          totalMoves /
+          (time / 60)
+        ).toFixed(1);
+        const legStr = sessionLegalOn ? "LEGAL" : "ANY";
+        const mixStr = sessionMixOn ? "MIX" : currentPieceType.toUpperCase();
+        const timeStr =
+          document.getElementById("game-time-select").value === "0"
+            ? `${Math.floor(sessionTimeElapsed / 60)
+                .toString()
+                .padStart(2, "0")}:${(sessionTimeElapsed % 60)
+                .toString()
+                .padStart(2, "0")} MIN`
+            : document.getElementById("game-time-select").value + " MIN";
+        const distStr = sessionCoOrdOn
+          ? "FOCUS"
+          : sessionConfounderOn
+          ? "DISTRACT"
+          : "FOCUS";
+        const modeStr = sessionCoOrdOn ? "CO-ORDS" : "HIGHLIGHT";
+        document.getElementById(
+          "res-settings"
+        ).innerText = `${legStr} | ${mixStr} | ${timeStr} | ${distStr} | ${modeStr}`;
+        document.getElementById("board-report").style.display = "block";
+      }
+
+      async function downloadReport() {
+        const report = document.getElementById("board-report");
+        const canvas = await html2canvas(report, {
+          backgroundColor: "#050505",
+          scale: 2,
+          useCORS: true, // Attempt to load images using CORS
+          onclone: (cl) => {
+            const s = cl.querySelector(".report-share-icon");
+            if (s) s.style.display = "none";
+          },
+        });
+        const link = document.createElement("a");
+        link.download = `NeuroChess_React.png`;
+        link.href = canvas.toDataURL("image/png");
+        link.click();
+      }
+
+      initBoard();
+      updateScale();
+      updateTimerPreview();
+      window.onresize = updateScale;
+    </script>
+  </body>
+</html>
